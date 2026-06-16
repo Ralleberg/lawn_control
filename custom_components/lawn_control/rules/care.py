@@ -1,0 +1,135 @@
+"""Transparent lawn care rule orchestration."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from ..const import (
+    CONF_LAWN_TYPE,
+    CONF_MAX_GRASS_HEIGHT,
+    CONF_MIN_GRASS_HEIGHT,
+    CONF_ROBOTIC_MOWER,
+    CONF_SHADE_LEVEL,
+    DEFAULT_MAX_GRASS_HEIGHT,
+    DEFAULT_MIN_GRASS_HEIGHT,
+)
+from .drought import calculate_drought_risk
+from .fertilizer import calculate_fertilizer_score
+from .mowing import (
+    calculate_growth_rate,
+    calculate_mowing_advice,
+    calculate_robot_mower_advice,
+)
+
+if TYPE_CHECKING:
+    from ..coordinator import LawnWeatherData
+
+
+def build_advice(config: dict[str, Any], weather: LawnWeatherData) -> dict[str, Any]:
+    """Build all lawn advice from config and weather inputs."""
+    height = recommended_grass_height(config, weather)
+    drought = calculate_drought_risk(config, weather)
+    growth = calculate_growth_rate(config, weather, drought)
+    fertilizer = calculate_fertilizer_score(config, weather, drought, growth)
+    mowing = calculate_mowing_advice(config, weather, drought, growth, height)
+    robot_mower = calculate_robot_mower_advice(
+        config, weather, drought, growth, mowing
+    )
+    recommendation = general_recommendation(drought, fertilizer, mowing, growth)
+
+    return {
+        "recommended_grass_height": height,
+        "drought_risk": drought,
+        "growth_rate": growth,
+        "fertilizer_score": fertilizer,
+        "fertilizer_day": {
+            "value": fertilizer["score"] >= fertilizer["threshold"]
+            and not fertilizer["blocking_factors"],
+            "attributes": {
+                "threshold": fertilizer["threshold"],
+                "blocking_factors": fertilizer["blocking_factors"],
+                "reason": fertilizer["reason"],
+            },
+        },
+        "should_mow": mowing,
+        "robot_mower_should_run": robot_mower,
+        "care_recommendation": recommendation,
+    }
+
+
+def recommended_grass_height(
+    config: dict[str, Any], weather: LawnWeatherData
+) -> dict[str, Any]:
+    """Calculate a recommended grass height range."""
+    min_height = int(config.get(CONF_MIN_GRASS_HEIGHT, DEFAULT_MIN_GRASS_HEIGHT))
+    max_height = int(config.get(CONF_MAX_GRASS_HEIGHT, DEFAULT_MAX_GRASS_HEIGHT))
+    reasons: list[str] = []
+
+    if config.get(CONF_LAWN_TYPE) == "ornamental":
+        min_height = max(20, min_height - 5)
+        max_height = max(min_height + 5, max_height - 5)
+        reasons.append("Ornamental lawns can be kept slightly shorter.")
+    elif config.get(CONF_LAWN_TYPE) == "wear_tolerant":
+        min_height += 5
+        max_height += 5
+        reasons.append("Wear tolerant lawns recover better with a little more leaf area.")
+    elif config.get(CONF_LAWN_TYPE) == "shade":
+        min_height += 10
+        max_height += 10
+        reasons.append("Shaded lawns need extra leaf area for stronger growth.")
+
+    if config.get(CONF_SHADE_LEVEL) == "high":
+        min_height += 5
+        max_height += 5
+        reasons.append("High shade increases the recommended cutting height.")
+
+    if weather.month in (6, 7, 8):
+        min_height += 5
+        max_height += 5
+        reasons.append("Summer stress favors a higher mowing height.")
+
+    if not reasons:
+        reasons.append("Configured lawn height range is suitable for current conditions.")
+
+    target = round((min_height + max_height) / 2)
+    return {
+        "value": target,
+        "attributes": {
+            "min_height": min_height,
+            "max_height": max_height,
+            "reason": " ".join(reasons),
+            "robotic_mower": bool(config.get(CONF_ROBOTIC_MOWER)),
+        },
+    }
+
+
+def general_recommendation(
+    drought: dict[str, Any],
+    fertilizer: dict[str, Any],
+    mowing: dict[str, Any],
+    growth: dict[str, Any],
+) -> dict[str, Any]:
+    """Create a short human-readable recommendation."""
+    actions: list[str] = []
+    reasons: list[str] = []
+
+    if drought["value"] in ("high", "critical"):
+        actions.append("Prioritize watering and avoid stressing the lawn.")
+        reasons.append(f"Drought risk is {drought['value']}.")
+    if mowing["value"]:
+        actions.append("Mowing is suitable today.")
+        reasons.append(mowing["attributes"]["reason"])
+    if fertilizer["score"] >= fertilizer["threshold"] and not fertilizer["blocking_factors"]:
+        actions.append("Fertilizer conditions are favorable.")
+        reasons.append(f"Fertilizer score is {fertilizer['score']}.")
+    if not actions:
+        actions.append("Keep monitoring conditions.")
+        reasons.append(f"Growth is {growth['value']} and no major action is recommended.")
+
+    return {
+        "value": " ".join(actions),
+        "attributes": {
+            "actions": actions,
+            "reason": " ".join(reasons),
+        },
+    }

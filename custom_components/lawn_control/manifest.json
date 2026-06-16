@@ -1,0 +1,13 @@
+{
+  "domain": "lawn_control",
+  "name": "Lawn Control",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/rasmusholt/Lawn-Control",
+  "integration_type": "helper",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/rasmusholt/Lawn-Control/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

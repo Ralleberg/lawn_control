@@ -1,0 +1,233 @@
+"""Config flow for Lawn Control."""
+
+from __future__ import annotations
+
+from typing import Any
+
+import voluptuous as vol
+
+from homeassistant import config_entries
+from homeassistant.const import CONF_NAME
+from homeassistant.core import callback
+from homeassistant.helpers import selector
+
+from .const import (
+    CARE_LEVELS,
+    CONF_CARE_LEVEL,
+    CONF_DAYS_SINCE_FERTILIZER,
+    CONF_FERTILIZER_K_PERCENT,
+    CONF_FERTILIZER_N_PERCENT,
+    CONF_FERTILIZER_P_PERCENT,
+    CONF_HUMIDITY_SENSOR,
+    CONF_LAWN_TYPE,
+    CONF_MAX_GRASS_HEIGHT,
+    CONF_MIN_GRASS_HEIGHT,
+    CONF_RAIN_SENSOR,
+    CONF_ROBOTIC_MOWER,
+    CONF_SHADE_LEVEL,
+    CONF_SOIL_MOISTURE_SENSOR,
+    CONF_SOIL_TYPE,
+    CONF_TEMPERATURE_SENSOR,
+    CONF_WATER_DURING_DROUGHT,
+    CONF_WATERING_LEVEL,
+    CONF_WEATHER_ENTITY,
+    DEFAULT_MAX_GRASS_HEIGHT,
+    DEFAULT_DAYS_SINCE_FERTILIZER,
+    DEFAULT_MIN_GRASS_HEIGHT,
+    DOMAIN,
+    LAWN_TYPES,
+    SHADE_LEVELS,
+    SOIL_TYPES,
+    WATERING_LEVELS,
+)
+
+
+def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+    """Return the config/options schema."""
+    defaults = defaults or {}
+    sensor_selector = selector.EntitySelector(
+        selector.EntitySelectorConfig(domain="sensor")
+    )
+
+    return vol.Schema(
+        {
+            vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, "Lawn")): str,
+            vol.Required(
+                CONF_WEATHER_ENTITY,
+                default=defaults.get(CONF_WEATHER_ENTITY),
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="weather")
+            ),
+            vol.Optional(
+                CONF_TEMPERATURE_SENSOR,
+                default=defaults.get(CONF_TEMPERATURE_SENSOR),
+            ): sensor_selector,
+            vol.Optional(
+                CONF_RAIN_SENSOR,
+                default=defaults.get(CONF_RAIN_SENSOR),
+            ): sensor_selector,
+            vol.Optional(
+                CONF_HUMIDITY_SENSOR,
+                default=defaults.get(CONF_HUMIDITY_SENSOR),
+            ): sensor_selector,
+            vol.Optional(
+                CONF_SOIL_MOISTURE_SENSOR,
+                default=defaults.get(CONF_SOIL_MOISTURE_SENSOR),
+            ): sensor_selector,
+            vol.Required(
+                CONF_LAWN_TYPE,
+                default=defaults.get(CONF_LAWN_TYPE, "regular"),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=LAWN_TYPES)
+            ),
+            vol.Required(
+                CONF_ROBOTIC_MOWER,
+                default=defaults.get(CONF_ROBOTIC_MOWER, False),
+            ): bool,
+            vol.Required(
+                CONF_SHADE_LEVEL,
+                default=defaults.get(CONF_SHADE_LEVEL, "low"),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=SHADE_LEVELS)
+            ),
+            vol.Required(
+                CONF_SOIL_TYPE,
+                default=defaults.get(CONF_SOIL_TYPE, "normal"),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=SOIL_TYPES)
+            ),
+            vol.Required(
+                CONF_CARE_LEVEL,
+                default=defaults.get(CONF_CARE_LEVEL, "normal"),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=CARE_LEVELS)
+            ),
+            vol.Required(
+                CONF_MIN_GRASS_HEIGHT,
+                default=defaults.get(
+                    CONF_MIN_GRASS_HEIGHT, DEFAULT_MIN_GRASS_HEIGHT
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=15, max=100, step=1, unit_of_measurement="mm"
+                )
+            ),
+            vol.Required(
+                CONF_MAX_GRASS_HEIGHT,
+                default=defaults.get(
+                    CONF_MAX_GRASS_HEIGHT, DEFAULT_MAX_GRASS_HEIGHT
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=20, max=120, step=1, unit_of_measurement="mm"
+                )
+            ),
+            vol.Optional(
+                CONF_WATER_DURING_DROUGHT,
+                default=defaults.get(CONF_WATER_DURING_DROUGHT, False),
+            ): bool,
+            vol.Optional(
+                CONF_WATERING_LEVEL,
+                default=defaults.get(CONF_WATERING_LEVEL, "normal"),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=WATERING_LEVELS)
+            ),
+            vol.Optional(
+                CONF_FERTILIZER_N_PERCENT,
+                default=defaults.get(CONF_FERTILIZER_N_PERCENT, 0),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, max=40, step=0.5, unit_of_measurement="%"
+                )
+            ),
+            vol.Optional(
+                CONF_FERTILIZER_P_PERCENT,
+                default=defaults.get(CONF_FERTILIZER_P_PERCENT, 0),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, max=40, step=0.5, unit_of_measurement="%"
+                )
+            ),
+            vol.Optional(
+                CONF_FERTILIZER_K_PERCENT,
+                default=defaults.get(CONF_FERTILIZER_K_PERCENT, 0),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, max=40, step=0.5, unit_of_measurement="%"
+                )
+            ),
+            vol.Optional(
+                CONF_DAYS_SINCE_FERTILIZER,
+                default=defaults.get(
+                    CONF_DAYS_SINCE_FERTILIZER,
+                    DEFAULT_DAYS_SINCE_FERTILIZER,
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(min=0, max=365, step=1)
+            ),
+        }
+    )
+
+
+class LawnControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Lawn Control."""
+
+    VERSION = 1
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Handle the initial step."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            if user_input[CONF_MIN_GRASS_HEIGHT] >= user_input[CONF_MAX_GRASS_HEIGHT]:
+                errors["base"] = "height_range"
+            else:
+                await self.async_set_unique_id(user_input[CONF_WEATHER_ENTITY])
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(
+                    title=user_input[CONF_NAME],
+                    data=user_input,
+                )
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=_schema(user_input),
+            errors=errors,
+        )
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> LawnControlOptionsFlow:
+        """Create the options flow."""
+        return LawnControlOptionsFlow(config_entry)
+
+
+class LawnControlOptionsFlow(config_entries.OptionsFlow):
+    """Handle Lawn Control options."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        self._config_entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Manage options."""
+        errors: dict[str, str] = {}
+        current = {**self._config_entry.data, **self._config_entry.options}
+
+        if user_input is not None:
+            if user_input[CONF_MIN_GRASS_HEIGHT] >= user_input[CONF_MAX_GRASS_HEIGHT]:
+                errors["base"] = "height_range"
+            else:
+                return self.async_create_entry(title="", data=user_input)
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=_schema(current),
+            errors=errors,
+        )

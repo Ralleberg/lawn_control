@@ -1,0 +1,69 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Lawn Control",
+        "description": "Configure lawn advice inputs.",
+        "data": {
+          "name": "Name",
+          "weather_entity": "Weather entity",
+          "temperature_sensor": "Temperature sensor",
+          "rain_sensor": "Rain sensor",
+          "humidity_sensor": "Humidity sensor",
+          "soil_moisture_sensor": "Soil moisture sensor",
+          "lawn_type": "Lawn type",
+          "robotic_mower": "Robotic mower",
+          "shade_level": "Shade level",
+          "soil_type": "Soil type",
+          "care_level": "Care level",
+          "min_grass_height": "Minimum grass height",
+          "max_grass_height": "Maximum grass height",
+          "water_during_drought": "Water during dry periods",
+          "watering_level": "Watering level",
+          "fertilizer_n_percent": "Fertilizer nitrogen",
+          "fertilizer_p_percent": "Fertilizer phosphorus",
+          "fertilizer_k_percent": "Fertilizer potassium",
+          "days_since_fertilizer": "Days since fertilizer"
+        }
+      }
+    },
+    "error": {
+      "height_range": "Minimum grass height must be lower than maximum grass height."
+    },
+    "abort": {
+      "already_configured": "This weather entity is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Lawn Control options",
+        "description": "Update lawn advice inputs.",
+        "data": {
+          "name": "Name",
+          "weather_entity": "Weather entity",
+          "temperature_sensor": "Temperature sensor",
+          "rain_sensor": "Rain sensor",
+          "humidity_sensor": "Humidity sensor",
+          "soil_moisture_sensor": "Soil moisture sensor",
+          "lawn_type": "Lawn type",
+          "robotic_mower": "Robotic mower",
+          "shade_level": "Shade level",
+          "soil_type": "Soil type",
+          "care_level": "Care level",
+          "min_grass_height": "Minimum grass height",
+          "max_grass_height": "Maximum grass height",
+          "water_during_drought": "Water during dry periods",
+          "watering_level": "Watering level",
+          "fertilizer_n_percent": "Fertilizer nitrogen",
+          "fertilizer_p_percent": "Fertilizer phosphorus",
+          "fertilizer_k_percent": "Fertilizer potassium",
+          "days_since_fertilizer": "Days since fertilizer"
+        }
+      }
+    },
+    "error": {
+      "height_range": "Minimum grass height must be lower than maximum grass height."
+    }
+  }
+}
