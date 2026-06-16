@@ -4,9 +4,6 @@
 
 Lawn Control is a Home Assistant custom integration that gives lawn care advice from a weather entity, forecast data and optional real sensors for rain, temperature, humidity and soil moisture.
 
-Version `0.2.1` is advisory only. It exposes a robot mower permission entity,
-but it does not send commands to mower hardware.
-
 ## Entities
 
 - `sensor.lawn_recommended_grass_height`: target grass height in millimeters with `min_height`, `max_height` and `reason` attributes.
@@ -55,13 +52,6 @@ Recommended grass height is locked once per day from the configured daily assess
 ## HACS
 
 This repository is structured for HACS as a Home Assistant integration. Add it as a custom repository in HACS, then install and restart Home Assistant.
-
-## Brand Assets
-
-The integration ships local Home Assistant brand assets in `custom_components/lawn_control/brand/`:
-
-- `icon.png` and `dark_icon.png`
-- `logo.png` and `dark_logo.png`
 
 ## Languages
 
