@@ -144,6 +144,26 @@
           "fast": "Fast"
         }
       },
+      "growth_mm_per_day": {
+        "name": "Growth per day",
+        "state_attributes": {
+          "estimated_mm_next_7_days": {
+            "name": "Estimated next 7 days"
+          },
+          "growth_rate": {
+            "name": "Growth rate"
+          },
+          "watering_growth_bonus_mm_per_day": {
+            "name": "Watering growth bonus"
+          },
+          "fertilizer_growth_bonus_mm_per_day": {
+            "name": "Fertilizer growth bonus"
+          },
+          "reason": {
+            "name": "Reason"
+          }
+        }
+      },
       "fertilizer_score": {
         "name": "Fertilizer score"
       },

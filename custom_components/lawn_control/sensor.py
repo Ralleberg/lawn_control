@@ -6,7 +6,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
+from homeassistant.components.sensor import (
+    SensorEntity,
+    SensorEntityDescription,
+    SensorStateClass,
+)
 from homeassistant.const import UnitOfLength
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -51,6 +55,30 @@ SENSORS: tuple[LawnSensorEntityDescription, ...] = (
         icon="mdi:sprout",
         value_fn=lambda data: data["growth_rate"]["value"],
         attrs_fn=lambda data: data["growth_rate"]["attributes"],
+    ),
+    LawnSensorEntityDescription(
+        key="growth_mm_per_day",
+        translation_key="growth_mm_per_day",
+        name="Lawn Growth Millimeters Per Day",
+        icon="mdi:chart-line",
+        native_unit_of_measurement="mm/day",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: data["growth_rate"]["attributes"][
+            "estimated_mm_per_day"
+        ],
+        attrs_fn=lambda data: {
+            "estimated_mm_next_7_days": data["growth_rate"]["attributes"][
+                "estimated_mm_next_7_days"
+            ],
+            "growth_rate": data["growth_rate"]["value"],
+            "watering_growth_bonus_mm_per_day": data["growth_rate"]["attributes"][
+                "watering_growth_bonus_mm_per_day"
+            ],
+            "fertilizer_growth_bonus_mm_per_day": data["growth_rate"]["attributes"][
+                "fertilizer_growth_bonus_mm_per_day"
+            ],
+            "reason": data["growth_rate"]["attributes"]["reason"],
+        },
     ),
     LawnSensorEntityDescription(
         key="fertilizer_score",
