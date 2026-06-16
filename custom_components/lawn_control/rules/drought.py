@@ -11,11 +11,12 @@ if TYPE_CHECKING:
 
 
 def calculate_drought_risk(
-    config: dict[str, Any], weather: LawnWeatherData
+    config: dict[str, Any], weather: LawnWeatherData, language: str
 ) -> dict[str, Any]:
     """Estimate drought risk from recent rain, forecast rain, heat, humidity and soil."""
     score = 0
     details: dict[str, Any] = {}
+    text = _texts(language)
 
     recent_rain = weather.recent_rain
     forecast_rain = weather.forecast_rain
@@ -24,36 +25,36 @@ def calculate_drought_risk(
 
     if recent_rain is None:
         score += 20
-        details["recent_rain"] = "unknown"
+        details["recent_rain"] = text["unknown"]
     elif recent_rain < 2:
         score += 35
-        details["recent_rain"] = "very low"
+        details["recent_rain"] = text["very_low"]
     elif recent_rain < 8:
         score += 20
-        details["recent_rain"] = "low"
+        details["recent_rain"] = text["low"]
     else:
-        details["recent_rain"] = "adequate"
+        details["recent_rain"] = text["adequate"]
 
     if forecast_rain is None:
         score += 10
-        details["forecast_rain"] = "unknown"
+        details["forecast_rain"] = text["unknown"]
     elif forecast_rain < 2:
         score += 20
-        details["forecast_rain"] = "little expected"
+        details["forecast_rain"] = text["little_expected"]
     elif forecast_rain >= 8:
         score -= 15
-        details["forecast_rain"] = "meaningful rain expected"
+        details["forecast_rain"] = text["meaningful_rain"]
 
     if temperature is not None and temperature >= 26:
         score += 20
-        details["temperature"] = "hot"
+        details["temperature"] = text["hot"]
     elif temperature is not None and temperature >= 22:
         score += 10
-        details["temperature"] = "warm"
+        details["temperature"] = text["warm"]
 
     if humidity is not None and humidity < 45:
         score += 15
-        details["humidity"] = "dry air"
+        details["humidity"] = text["dry_air"]
 
     if weather.soil_moisture is not None:
         details["soil_moisture"] = weather.soil_moisture
@@ -64,20 +65,20 @@ def calculate_drought_risk(
 
     if config.get(CONF_SOIL_TYPE) == "sandy":
         score += 10
-        details["soil_type"] = "sandy soil dries quickly"
+        details["soil_type"] = text["sandy_soil"]
     elif config.get(CONF_SOIL_TYPE) == "clay":
         score -= 5
-        details["soil_type"] = "clay soil holds water longer"
+        details["soil_type"] = text["clay_soil"]
 
     if weather.month in (6, 7, 8):
         score += 10
-        details["season"] = "summer"
+        details["season"] = text["summer"]
 
     watering_reduction = _watering_reduction(config)
     if watering_reduction:
         score -= watering_reduction
         details["watering"] = (
-            f"watering during dry periods reduces stress by {watering_reduction}"
+            text["watering_reduction"].format(reduction=watering_reduction)
         )
 
     score = max(0, min(100, score))
@@ -95,7 +96,7 @@ def calculate_drought_risk(
         "attributes": {
             "score": score,
             "details": details,
-            "reason": f"Drought score is {score} based on water, heat and soil inputs.",
+            "reason": text["reason"].format(score=score),
         },
     }
 
@@ -111,3 +112,41 @@ def _watering_reduction(config: dict[str, Any]) -> int:
     if level == "low":
         return 12
     return 22
+
+
+def _texts(language: str) -> dict[str, str]:
+    """Return localized drought text."""
+    if language.lower().startswith("da"):
+        return {
+            "unknown": "ukendt",
+            "very_low": "meget lav",
+            "low": "lav",
+            "adequate": "tilstrækkelig",
+            "little_expected": "kun lidt forventet",
+            "meaningful_rain": "betydelig regn forventes",
+            "hot": "varmt",
+            "warm": "lunt",
+            "dry_air": "tør luft",
+            "sandy_soil": "sandet jord tørrer hurtigt",
+            "clay_soil": "lerjord holder længere på vandet",
+            "summer": "sommer",
+            "watering_reduction": "vanding i tørre perioder reducerer stress med {reduction}",
+            "reason": "Tørkescore er {score} baseret på vand, varme og jordinput.",
+        }
+
+    return {
+        "unknown": "unknown",
+        "very_low": "very low",
+        "low": "low",
+        "adequate": "adequate",
+        "little_expected": "little expected",
+        "meaningful_rain": "meaningful rain expected",
+        "hot": "hot",
+        "warm": "warm",
+        "dry_air": "dry air",
+        "sandy_soil": "sandy soil dries quickly",
+        "clay_soil": "clay soil holds water longer",
+        "summer": "summer",
+        "watering_reduction": "watering during dry periods reduces stress by {reduction}",
+        "reason": "Drought score is {score} based on water, heat and soil inputs.",
+    }

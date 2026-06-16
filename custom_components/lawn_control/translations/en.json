@@ -123,6 +123,33 @@
           },
           "reason": {
             "name": "Reason"
+          },
+          "robotic_mower": {
+            "name": "Robotic mower"
+          },
+          "locked": {
+            "name": "Locked"
+          },
+          "lock_time": {
+            "name": "Lock time"
+          },
+          "locked_at": {
+            "name": "Locked at"
+          },
+          "next_update": {
+            "name": "Next update"
+          },
+          "live_value": {
+            "name": "Live value"
+          },
+          "live_min_height": {
+            "name": "Live minimum height"
+          },
+          "live_max_height": {
+            "name": "Live maximum height"
+          },
+          "live_reason": {
+            "name": "Live reason"
           }
         }
       },
@@ -133,6 +160,17 @@
           "medium": "Medium",
           "high": "High",
           "critical": "Critical"
+        },
+        "state_attributes": {
+          "score": {
+            "name": "Score"
+          },
+          "details": {
+            "name": "Details"
+          },
+          "reason": {
+            "name": "Reason"
+          }
         }
       },
       "growth_rate": {
@@ -142,16 +180,13 @@
           "slow": "Slow",
           "normal": "Normal",
           "fast": "Fast"
-        }
-      },
-      "growth_mm_per_day": {
-        "name": "Growth per day",
+        },
         "state_attributes": {
+          "estimated_mm_per_day": {
+            "name": "Estimated growth per day"
+          },
           "estimated_mm_next_7_days": {
             "name": "Estimated next 7 days"
-          },
-          "growth_rate": {
-            "name": "Growth rate"
           },
           "watering_growth_bonus_mm_per_day": {
             "name": "Watering growth bonus"
@@ -159,27 +194,133 @@
           "fertilizer_growth_bonus_mm_per_day": {
             "name": "Fertilizer growth bonus"
           },
+          "watering_effect": {
+            "name": "Watering effect"
+          },
+          "npk_effect": {
+            "name": "NPK effect"
+          },
           "reason": {
             "name": "Reason"
           }
         }
       },
       "fertilizer_score": {
-        "name": "Fertilizer score"
+        "name": "Fertilizer score",
+        "state_attributes": {
+          "score": {
+            "name": "Score"
+          },
+          "threshold": {
+            "name": "Threshold"
+          },
+          "details": {
+            "name": "Details"
+          },
+          "blocking_factors": {
+            "name": "Blocking factors"
+          },
+          "reason": {
+            "name": "Reason"
+          }
+        }
       },
       "care_recommendation": {
-        "name": "Care recommendation"
+        "name": "Care recommendation",
+        "state_attributes": {
+          "actions": {
+            "name": "Actions"
+          },
+          "reason": {
+            "name": "Reason"
+          }
+        }
       }
     },
     "binary_sensor": {
       "good_day_for_fertilizer": {
-        "name": "Good day for fertilizer"
+        "name": "Good day for fertilizer",
+        "state_attributes": {
+          "threshold": {
+            "name": "Threshold"
+          },
+          "blocking_factors": {
+            "name": "Blocking factors"
+          },
+          "reason": {
+            "name": "Reason"
+          }
+        }
       },
       "should_mow": {
-        "name": "Should mow"
+        "name": "Should mow",
+        "state_attributes": {
+          "blocking_factors": {
+            "name": "Blocking factors"
+          },
+          "recommended_min_height": {
+            "name": "Recommended minimum height"
+          },
+          "recommended_max_height": {
+            "name": "Recommended maximum height"
+          },
+          "reason": {
+            "name": "Reason"
+          }
+        }
       },
       "robot_mower_should_run": {
-        "name": "Robot mower should run"
+        "name": "Robot mower should run",
+        "state_attributes": {
+          "blocking_factors": {
+            "name": "Blocking factors"
+          },
+          "growth_rate": {
+            "name": "Growth rate"
+          },
+          "estimated_mm_per_day": {
+            "name": "Estimated growth per day"
+          },
+          "historical_temperature": {
+            "name": "Historical temperature"
+          },
+          "historical_humidity": {
+            "name": "Historical humidity"
+          },
+          "historical_rain": {
+            "name": "Historical rain"
+          },
+          "reason": {
+            "name": "Reason"
+          },
+          "locked": {
+            "name": "Locked"
+          },
+          "lock_time": {
+            "name": "Lock time"
+          },
+          "locked_at": {
+            "name": "Locked at"
+          },
+          "next_update": {
+            "name": "Next update"
+          },
+          "live_value": {
+            "name": "Live value"
+          },
+          "live_blocking_factors": {
+            "name": "Live blocking factors"
+          },
+          "live_reason": {
+            "name": "Live reason"
+          },
+          "live_growth_rate": {
+            "name": "Live growth rate"
+          },
+          "live_estimated_mm_per_day": {
+            "name": "Live estimated growth"
+          }
+        }
       }
     }
   }

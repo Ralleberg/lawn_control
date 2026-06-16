@@ -123,6 +123,33 @@
           },
           "reason": {
             "name": "Årsag"
+          },
+          "robotic_mower": {
+            "name": "Robotplæneklipper"
+          },
+          "locked": {
+            "name": "Låst"
+          },
+          "lock_time": {
+            "name": "Låsetidspunkt"
+          },
+          "locked_at": {
+            "name": "Låst kl."
+          },
+          "next_update": {
+            "name": "Næste opdatering"
+          },
+          "live_value": {
+            "name": "Aktuel værdi"
+          },
+          "live_min_height": {
+            "name": "Aktuel minimum højde"
+          },
+          "live_max_height": {
+            "name": "Aktuel maksimum højde"
+          },
+          "live_reason": {
+            "name": "Aktuel årsag"
           }
         }
       },
@@ -133,6 +160,17 @@
           "medium": "Mellem",
           "high": "Høj",
           "critical": "Kritisk"
+        },
+        "state_attributes": {
+          "score": {
+            "name": "Score"
+          },
+          "details": {
+            "name": "Detaljer"
+          },
+          "reason": {
+            "name": "Årsag"
+          }
         }
       },
       "growth_rate": {
@@ -142,16 +180,13 @@
           "slow": "Langsom",
           "normal": "Normal",
           "fast": "Hurtig"
-        }
-      },
-      "growth_mm_per_day": {
-        "name": "Vækst pr. dag",
+        },
         "state_attributes": {
+          "estimated_mm_per_day": {
+            "name": "Estimeret vækst pr. dag"
+          },
           "estimated_mm_next_7_days": {
             "name": "Estimeret næste 7 dage"
-          },
-          "growth_rate": {
-            "name": "Væksthastighed"
           },
           "watering_growth_bonus_mm_per_day": {
             "name": "Vækstbonus fra vanding"
@@ -159,27 +194,133 @@
           "fertilizer_growth_bonus_mm_per_day": {
             "name": "Vækstbonus fra gødning"
           },
+          "watering_effect": {
+            "name": "Vandingseffekt"
+          },
+          "npk_effect": {
+            "name": "NPK-effekt"
+          },
           "reason": {
             "name": "Årsag"
           }
         }
       },
       "fertilizer_score": {
-        "name": "Gødningsscore"
+        "name": "Gødningsscore",
+        "state_attributes": {
+          "score": {
+            "name": "Score"
+          },
+          "threshold": {
+            "name": "Grænseværdi"
+          },
+          "details": {
+            "name": "Detaljer"
+          },
+          "blocking_factors": {
+            "name": "Blokerende faktorer"
+          },
+          "reason": {
+            "name": "Årsag"
+          }
+        }
       },
       "care_recommendation": {
-        "name": "Plejeanbefaling"
+        "name": "Plejeanbefaling",
+        "state_attributes": {
+          "actions": {
+            "name": "Handlinger"
+          },
+          "reason": {
+            "name": "Årsag"
+          }
+        }
       }
     },
     "binary_sensor": {
       "good_day_for_fertilizer": {
-        "name": "God dag til gødning"
+        "name": "God dag til gødning",
+        "state_attributes": {
+          "threshold": {
+            "name": "Grænseværdi"
+          },
+          "blocking_factors": {
+            "name": "Blokerende faktorer"
+          },
+          "reason": {
+            "name": "Årsag"
+          }
+        }
       },
       "should_mow": {
-        "name": "Bør slå græs"
+        "name": "Bør slå græs",
+        "state_attributes": {
+          "blocking_factors": {
+            "name": "Blokerende faktorer"
+          },
+          "recommended_min_height": {
+            "name": "Anbefalet minimum højde"
+          },
+          "recommended_max_height": {
+            "name": "Anbefalet maksimum højde"
+          },
+          "reason": {
+            "name": "Årsag"
+          }
+        }
       },
       "robot_mower_should_run": {
-        "name": "Robotplæneklipper bør køre"
+        "name": "Robotplæneklipper bør køre",
+        "state_attributes": {
+          "blocking_factors": {
+            "name": "Blokerende faktorer"
+          },
+          "growth_rate": {
+            "name": "Væksthastighed"
+          },
+          "estimated_mm_per_day": {
+            "name": "Estimeret vækst pr. dag"
+          },
+          "historical_temperature": {
+            "name": "Historisk temperatur"
+          },
+          "historical_humidity": {
+            "name": "Historisk luftfugtighed"
+          },
+          "historical_rain": {
+            "name": "Historisk regn"
+          },
+          "reason": {
+            "name": "Årsag"
+          },
+          "locked": {
+            "name": "Låst"
+          },
+          "lock_time": {
+            "name": "Låsetidspunkt"
+          },
+          "locked_at": {
+            "name": "Låst kl."
+          },
+          "next_update": {
+            "name": "Næste opdatering"
+          },
+          "live_value": {
+            "name": "Aktuel værdi"
+          },
+          "live_blocking_factors": {
+            "name": "Aktuelle blokerende faktorer"
+          },
+          "live_reason": {
+            "name": "Aktuel årsag"
+          },
+          "live_growth_rate": {
+            "name": "Aktuel væksthastighed"
+          },
+          "live_estimated_mm_per_day": {
+            "name": "Aktuel estimeret vækst"
+          }
+        }
       }
     }
   }

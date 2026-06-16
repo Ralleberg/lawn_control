@@ -29,13 +29,15 @@ def build_advice(
     config: dict[str, Any], weather: LawnWeatherData, language: str
 ) -> dict[str, Any]:
     """Build all lawn advice from config and weather inputs."""
-    height = recommended_grass_height(config, weather)
-    drought = calculate_drought_risk(config, weather)
-    growth = calculate_growth_rate(config, weather, drought)
-    fertilizer = calculate_fertilizer_score(config, weather, drought, growth)
-    mowing = calculate_mowing_advice(config, weather, drought, growth, height)
+    height = recommended_grass_height(config, weather, language)
+    drought = calculate_drought_risk(config, weather, language)
+    growth = calculate_growth_rate(config, weather, drought, language)
+    fertilizer = calculate_fertilizer_score(config, weather, drought, growth, language)
+    mowing = calculate_mowing_advice(
+        config, weather, drought, growth, height, language
+    )
     robot_mower = calculate_robot_mower_advice(
-        config, weather, drought, growth, mowing
+        config, weather, drought, growth, mowing, language
     )
     recommendation = general_recommendation(
         drought, fertilizer, mowing, growth, language
@@ -62,38 +64,39 @@ def build_advice(
 
 
 def recommended_grass_height(
-    config: dict[str, Any], weather: LawnWeatherData
+    config: dict[str, Any], weather: LawnWeatherData, language: str
 ) -> dict[str, Any]:
     """Calculate a recommended grass height range."""
     min_height = int(config.get(CONF_MIN_GRASS_HEIGHT, DEFAULT_MIN_GRASS_HEIGHT))
     max_height = int(config.get(CONF_MAX_GRASS_HEIGHT, DEFAULT_MAX_GRASS_HEIGHT))
     reasons: list[str] = []
+    text = _texts(language)
 
     if config.get(CONF_LAWN_TYPE) == "ornamental":
         min_height = max(20, min_height - 5)
         max_height = max(min_height + 5, max_height - 5)
-        reasons.append("Ornamental lawns can be kept slightly shorter.")
+        reasons.append(text["ornamental_height"])
     elif config.get(CONF_LAWN_TYPE) == "wear_tolerant":
         min_height += 5
         max_height += 5
-        reasons.append("Wear tolerant lawns recover better with a little more leaf area.")
+        reasons.append(text["wear_height"])
     elif config.get(CONF_LAWN_TYPE) == "shade":
         min_height += 10
         max_height += 10
-        reasons.append("Shaded lawns need extra leaf area for stronger growth.")
+        reasons.append(text["shade_height"])
 
     if config.get(CONF_SHADE_LEVEL) == "high":
         min_height += 5
         max_height += 5
-        reasons.append("High shade increases the recommended cutting height.")
+        reasons.append(text["high_shade_height"])
 
     if weather.month in (6, 7, 8):
         min_height += 5
         max_height += 5
-        reasons.append("Summer stress favors a higher mowing height.")
+        reasons.append(text["summer_height"])
 
     if not reasons:
-        reasons.append("Configured lawn height range is suitable for current conditions.")
+        reasons.append(text["configured_height"])
 
     target = round((min_height + max_height) / 2)
     return {
@@ -161,6 +164,12 @@ def _texts(language: str) -> dict[str, str]:
             "slow": "langsom",
             "normal": "normal",
             "fast": "hurtig",
+            "ornamental_height": "Prydplæner kan holdes en smule kortere.",
+            "wear_height": "Slidstærke plæner kommer sig bedre med lidt mere bladmasse.",
+            "shade_height": "Skyggeplæner har brug for ekstra bladmasse for stærkere vækst.",
+            "high_shade_height": "Meget skygge øger den anbefalede klippehøjde.",
+            "summer_height": "Sommerstress taler for en højere klippehøjde.",
+            "configured_height": "Det konfigurerede højdeinterval passer til de aktuelle forhold.",
         }
 
     return {
@@ -180,4 +189,10 @@ def _texts(language: str) -> dict[str, str]:
         "slow": "slow",
         "normal": "normal",
         "fast": "fast",
+        "ornamental_height": "Ornamental lawns can be kept slightly shorter.",
+        "wear_height": "Wear tolerant lawns recover better with a little more leaf area.",
+        "shade_height": "Shaded lawns need extra leaf area for stronger growth.",
+        "high_shade_height": "High shade increases the recommended cutting height.",
+        "summer_height": "Summer stress favors a higher mowing height.",
+        "configured_height": "Configured lawn height range is suitable for current conditions.",
     }
