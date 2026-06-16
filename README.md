@@ -2,7 +2,7 @@
 
 Lawn Control is a Home Assistant custom integration that gives lawn care advice from a weather entity, forecast data and optional real sensors for rain, temperature, humidity and soil moisture.
 
-Version `0.1.6` is advisory only. It exposes a robot mower permission entity,
+Version `0.1.7` is advisory only. It exposes a robot mower permission entity,
 but it does not send commands to mower hardware.
 
 ## Entities
@@ -34,7 +34,7 @@ Add the integration from Home Assistant's integrations UI. The config flow asks 
 
 ## Rule Approach
 
-The rule engine is intentionally simple in `0.1.6`. It uses transparent scoring and blocking checks for:
+The rule engine is intentionally simple in `0.1.7`. It uses transparent scoring and blocking checks for:
 
 - Higher grass during summer stress, shade and wear.
 - Drought risk from rain, forecast rain, temperature, humidity, soil moisture, soil type and season.
@@ -43,11 +43,11 @@ The rule engine is intentionally simple in `0.1.6`. It uses transparent scoring 
 - Extra expected growth from recent NPK fertilizer, mainly driven by nitrogen and reduced over time.
 - Fertilizer suitability from season, growth, drought stress, heat and rain forecast.
 - Mowing suitability from wet conditions, drought risk, growth rate and forecast rain.
-- Robot mower run permission from mowing suitability, wet grass, rain forecast, drought stress and growth.
+- Robot mower run permission from mowing suitability, recent weather history, wet grass, rain forecast, drought stress and growth.
 
 Each advisory entity exposes the decision details in attributes so the result can be inspected and refined.
 
-Recommended grass height is locked once per day from 08:00. Robot mower run permission is limited to the 08:00-18:00 window, while weather and lawn factors are still evaluated live during that window.
+Recommended grass height is locked once per day from 08:00. Robot mower run permission is also locked once per day from 08:00, using recent temperature, humidity and rain history together with forecast and current lawn factors.
 
 ## HACS
 

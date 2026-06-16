@@ -154,6 +154,15 @@ def calculate_robot_mower_advice(
     if weather.weather_state in ("rainy", "pouring", "lightning-rainy", "hail"):
         blocking_factors.append("Current weather is not suitable for robot mowing.")
 
+    if weather.historical_rain is not None and weather.historical_rain >= 5:
+        blocking_factors.append("Recent rain history suggests wet grass.")
+
+    if weather.historical_humidity is not None and weather.historical_humidity >= 90:
+        blocking_factors.append("Recent humidity history suggests slow drying.")
+
+    if weather.historical_temperature is not None and weather.historical_temperature < 6:
+        blocking_factors.append("Recent temperature history is too cold for mowing.")
+
     if weather.recent_rain is not None and weather.recent_rain >= 5:
         blocking_factors.append("Recent rain can leave grass too wet for robot mowing.")
 
@@ -178,6 +187,9 @@ def calculate_robot_mower_advice(
             "blocking_factors": blocking_factors,
             "growth_rate": growth["value"],
             "estimated_mm_per_day": growth["attributes"]["estimated_mm_per_day"],
+            "historical_temperature": weather.historical_temperature,
+            "historical_humidity": weather.historical_humidity,
+            "historical_rain": weather.historical_rain,
             "reason": reason,
         },
     }
