@@ -75,7 +75,10 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 CONF_LAWN_TYPE,
                 default=defaults.get(CONF_LAWN_TYPE, "regular"),
             ): selector.SelectSelector(
-                selector.SelectSelectorConfig(options=LAWN_TYPES)
+                selector.SelectSelectorConfig(
+                    options=LAWN_TYPES,
+                    translation_key=CONF_LAWN_TYPE,
+                )
             ),
             vol.Required(
                 CONF_ROBOTIC_MOWER,
@@ -85,19 +88,28 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 CONF_SHADE_LEVEL,
                 default=defaults.get(CONF_SHADE_LEVEL, "low"),
             ): selector.SelectSelector(
-                selector.SelectSelectorConfig(options=SHADE_LEVELS)
+                selector.SelectSelectorConfig(
+                    options=SHADE_LEVELS,
+                    translation_key=CONF_SHADE_LEVEL,
+                )
             ),
             vol.Required(
                 CONF_SOIL_TYPE,
                 default=defaults.get(CONF_SOIL_TYPE, "normal"),
             ): selector.SelectSelector(
-                selector.SelectSelectorConfig(options=SOIL_TYPES)
+                selector.SelectSelectorConfig(
+                    options=SOIL_TYPES,
+                    translation_key=CONF_SOIL_TYPE,
+                )
             ),
             vol.Required(
                 CONF_CARE_LEVEL,
                 default=defaults.get(CONF_CARE_LEVEL, "normal"),
             ): selector.SelectSelector(
-                selector.SelectSelectorConfig(options=CARE_LEVELS)
+                selector.SelectSelectorConfig(
+                    options=CARE_LEVELS,
+                    translation_key=CONF_CARE_LEVEL,
+                )
             ),
             vol.Required(
                 CONF_MIN_GRASS_HEIGHT,
@@ -127,7 +139,10 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 CONF_WATERING_LEVEL,
                 default=defaults.get(CONF_WATERING_LEVEL, "normal"),
             ): selector.SelectSelector(
-                selector.SelectSelectorConfig(options=WATERING_LEVELS)
+                selector.SelectSelectorConfig(
+                    options=WATERING_LEVELS,
+                    translation_key=CONF_WATERING_LEVEL,
+                )
             ),
             vol.Optional(
                 CONF_FERTILIZER_N_PERCENT,

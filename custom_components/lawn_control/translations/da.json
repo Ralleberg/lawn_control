@@ -1,0 +1,166 @@
+{
+  "title": "Lawn Control",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Lawn Control",
+        "description": "Konfigurer input til plænerådgivning.",
+        "data": {
+          "name": "Navn",
+          "weather_entity": "Vejr-entity",
+          "temperature_sensor": "Temperatursensor",
+          "rain_sensor": "Regnsensor",
+          "humidity_sensor": "Luftfugtighedssensor",
+          "soil_moisture_sensor": "Jordfugtighedssensor",
+          "lawn_type": "Plænetype",
+          "robotic_mower": "Robotplæneklipper",
+          "shade_level": "Skyggeniveau",
+          "soil_type": "Jordtype",
+          "care_level": "Plejeniveau",
+          "min_grass_height": "Minimum græshøjde",
+          "max_grass_height": "Maksimum græshøjde",
+          "water_during_drought": "Vander i tørre perioder",
+          "watering_level": "Vandingsniveau",
+          "fertilizer_n_percent": "Kvælstof i gødning",
+          "fertilizer_p_percent": "Fosfor i gødning",
+          "fertilizer_k_percent": "Kalium i gødning",
+          "days_since_fertilizer": "Dage siden gødning"
+        }
+      }
+    },
+    "error": {
+      "height_range": "Minimum græshøjde skal være lavere end maksimum græshøjde."
+    },
+    "abort": {
+      "already_configured": "Denne plæne er allerede konfigureret."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Lawn Control indstillinger",
+        "description": "Opdater input til plænerådgivning.",
+        "data": {
+          "name": "Navn",
+          "weather_entity": "Vejr-entity",
+          "temperature_sensor": "Temperatursensor",
+          "rain_sensor": "Regnsensor",
+          "humidity_sensor": "Luftfugtighedssensor",
+          "soil_moisture_sensor": "Jordfugtighedssensor",
+          "lawn_type": "Plænetype",
+          "robotic_mower": "Robotplæneklipper",
+          "shade_level": "Skyggeniveau",
+          "soil_type": "Jordtype",
+          "care_level": "Plejeniveau",
+          "min_grass_height": "Minimum græshøjde",
+          "max_grass_height": "Maksimum græshøjde",
+          "water_during_drought": "Vander i tørre perioder",
+          "watering_level": "Vandingsniveau",
+          "fertilizer_n_percent": "Kvælstof i gødning",
+          "fertilizer_p_percent": "Fosfor i gødning",
+          "fertilizer_k_percent": "Kalium i gødning",
+          "days_since_fertilizer": "Dage siden gødning"
+        }
+      }
+    },
+    "error": {
+      "height_range": "Minimum græshøjde skal være lavere end maksimum græshøjde."
+    }
+  },
+  "selector": {
+    "lawn_type": {
+      "options": {
+        "regular": "Almindelig",
+        "ornamental": "Prydplæne",
+        "wear_tolerant": "Slidstærk",
+        "shade": "Skygge"
+      }
+    },
+    "shade_level": {
+      "options": {
+        "low": "Lav",
+        "medium": "Mellem",
+        "high": "Høj"
+      }
+    },
+    "soil_type": {
+      "options": {
+        "sandy": "Sandet",
+        "normal": "Normal",
+        "clay": "Ler"
+      }
+    },
+    "care_level": {
+      "options": {
+        "low": "Lav",
+        "normal": "Normal",
+        "high": "Høj"
+      }
+    },
+    "watering_level": {
+      "options": {
+        "low": "Lav",
+        "normal": "Normal",
+        "high": "Høj"
+      }
+    }
+  },
+  "device": {
+    "lawn": {
+      "name": "Plæne"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "recommended_grass_height": {
+        "name": "Anbefalet græshøjde",
+        "state_attributes": {
+          "min_height": {
+            "name": "Minimum højde"
+          },
+          "max_height": {
+            "name": "Maksimum højde"
+          },
+          "reason": {
+            "name": "Årsag"
+          }
+        }
+      },
+      "drought_risk": {
+        "name": "Tørkerisiko",
+        "state": {
+          "low": "Lav",
+          "medium": "Mellem",
+          "high": "Høj",
+          "critical": "Kritisk"
+        }
+      },
+      "growth_rate": {
+        "name": "Væksthastighed",
+        "state": {
+          "stopped": "Stoppet",
+          "slow": "Langsom",
+          "normal": "Normal",
+          "fast": "Hurtig"
+        }
+      },
+      "fertilizer_score": {
+        "name": "Gødningsscore"
+      },
+      "care_recommendation": {
+        "name": "Plejeanbefaling"
+      }
+    },
+    "binary_sensor": {
+      "good_day_for_fertilizer": {
+        "name": "God dag til gødning"
+      },
+      "should_mow": {
+        "name": "Bør slå græs"
+      },
+      "robot_mower_should_run": {
+        "name": "Robotplæneklipper bør køre"
+      }
+    }
+  }
+}

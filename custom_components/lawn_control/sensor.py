@@ -82,7 +82,7 @@ class LawnControlSensor(CoordinatorEntity[LawnControlCoordinator], SensorEntity)
     """Lawn Control sensor."""
 
     entity_description: LawnSensorEntityDescription
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
 
     def __init__(
         self,
@@ -94,11 +94,11 @@ class LawnControlSensor(CoordinatorEntity[LawnControlCoordinator], SensorEntity)
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
-        self._attr_name = description.name
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name=entry.title,
             manufacturer="Lawn Control",
+            translation_key="lawn",
         )
 
     @property

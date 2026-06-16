@@ -1,4 +1,5 @@
 {
+  "title": "Lawn Control",
   "config": {
     "step": {
       "user": {
@@ -64,6 +65,102 @@
     },
     "error": {
       "height_range": "Minimum grass height must be lower than maximum grass height."
+    }
+  },
+  "selector": {
+    "lawn_type": {
+      "options": {
+        "regular": "Regular",
+        "ornamental": "Ornamental",
+        "wear_tolerant": "Wear tolerant",
+        "shade": "Shade"
+      }
+    },
+    "shade_level": {
+      "options": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High"
+      }
+    },
+    "soil_type": {
+      "options": {
+        "sandy": "Sandy",
+        "normal": "Normal",
+        "clay": "Clay"
+      }
+    },
+    "care_level": {
+      "options": {
+        "low": "Low",
+        "normal": "Normal",
+        "high": "High"
+      }
+    },
+    "watering_level": {
+      "options": {
+        "low": "Low",
+        "normal": "Normal",
+        "high": "High"
+      }
+    }
+  },
+  "device": {
+    "lawn": {
+      "name": "Lawn"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "recommended_grass_height": {
+        "name": "Recommended grass height",
+        "state_attributes": {
+          "min_height": {
+            "name": "Minimum height"
+          },
+          "max_height": {
+            "name": "Maximum height"
+          },
+          "reason": {
+            "name": "Reason"
+          }
+        }
+      },
+      "drought_risk": {
+        "name": "Drought risk",
+        "state": {
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High",
+          "critical": "Critical"
+        }
+      },
+      "growth_rate": {
+        "name": "Growth rate",
+        "state": {
+          "stopped": "Stopped",
+          "slow": "Slow",
+          "normal": "Normal",
+          "fast": "Fast"
+        }
+      },
+      "fertilizer_score": {
+        "name": "Fertilizer score"
+      },
+      "care_recommendation": {
+        "name": "Care recommendation"
+      }
+    },
+    "binary_sensor": {
+      "good_day_for_fertilizer": {
+        "name": "Good day for fertilizer"
+      },
+      "should_mow": {
+        "name": "Should mow"
+      },
+      "robot_mower_should_run": {
+        "name": "Robot mower should run"
+      }
     }
   }
 }
