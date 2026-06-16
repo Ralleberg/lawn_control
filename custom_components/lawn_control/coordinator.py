@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import logging
+from copy import deepcopy
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.event import async_track_time_change
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_HUMIDITY_SENSOR,
@@ -23,6 +27,10 @@ from .const import (
 from .rules.care import build_advice
 
 LOGGER = logging.getLogger(__name__)
+
+LOCK_START_HOUR = 8
+LOCK_END_HOUR = 18
+STORAGE_VERSION = 1
 
 
 @dataclass(slots=True)
@@ -51,6 +59,39 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=DEFAULT_UPDATE_INTERVAL,
         )
         self.entry = entry
+        self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
+        self._stored_data: dict[str, Any] = {}
+        self._unsub_refresh_times: list[Any] = []
+
+    async def async_start(self) -> None:
+        """Load stored snapshots and set up scheduled refreshes."""
+        self._stored_data = await self._store.async_load() or {}
+        self._unsub_refresh_times = [
+            async_track_time_change(
+                self.hass,
+                self._async_refresh_from_schedule,
+                hour=LOCK_START_HOUR,
+                minute=0,
+                second=0,
+            ),
+            async_track_time_change(
+                self.hass,
+                self._async_refresh_from_schedule,
+                hour=LOCK_END_HOUR,
+                minute=0,
+                second=0,
+            ),
+        ]
+
+    async def async_shutdown(self) -> None:
+        """Stop scheduled refreshes."""
+        for unsub in self._unsub_refresh_times:
+            unsub()
+        self._unsub_refresh_times = []
+
+    async def _async_refresh_from_schedule(self, now: datetime) -> None:
+        """Refresh when a lock window starts or ends."""
+        await self.async_request_refresh()
 
     @property
     def config(self) -> dict[str, Any]:
@@ -62,7 +103,95 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         forecast = await self._async_get_forecast()
         weather_data = self._read_weather_data(forecast)
         language = getattr(self.hass.config, "language", "en")
-        return build_advice(self.config, weather_data, language)
+        advice = build_advice(self.config, weather_data, language)
+        advice, should_save = self._apply_locked_values(advice)
+        if should_save:
+            await self._store.async_save(self._stored_data)
+        return advice
+
+    def _apply_locked_values(
+        self, advice: dict[str, Any]
+    ) -> tuple[dict[str, Any], bool]:
+        """Apply daily and daytime locks to selected advice values."""
+        now = dt_util.now()
+        date_key = now.date().isoformat()
+        should_save = False
+
+        advice, saved = self._apply_grass_height_lock(advice, now, date_key)
+        should_save = should_save or saved
+
+        advice = self._apply_robot_mower_window(advice, now)
+
+        return advice, should_save
+
+    def _apply_grass_height_lock(
+        self, advice: dict[str, Any], now: datetime, date_key: str
+    ) -> tuple[dict[str, Any], bool]:
+        """Lock recommended grass height once per day from 08:00."""
+        lock = self._stored_data.get("recommended_grass_height")
+        should_save = False
+
+        if now.hour >= LOCK_START_HOUR and (
+            not lock or lock.get("date") != date_key
+        ):
+            lock = {
+                "date": date_key,
+                "lock_time": _iso_at(now, LOCK_START_HOUR),
+                "locked_at": now.isoformat(),
+                "data": deepcopy(advice["recommended_grass_height"]),
+            }
+            self._stored_data["recommended_grass_height"] = lock
+            should_save = True
+
+        if lock:
+            live = deepcopy(advice["recommended_grass_height"])
+            locked = deepcopy(lock["data"])
+            locked["attributes"] = {
+                **locked.get("attributes", {}),
+                "locked": True,
+                "lock_time": lock.get("lock_time", lock["locked_at"]),
+                "locked_at": lock["locked_at"],
+                "next_update": _next_lock_start(now).isoformat(),
+                "live_value": live["value"],
+                "live_min_height": live["attributes"]["min_height"],
+                "live_max_height": live["attributes"]["max_height"],
+                "live_reason": live["attributes"]["reason"],
+            }
+            advice["recommended_grass_height"] = locked
+
+        return advice, should_save
+
+    def _apply_robot_mower_window(
+        self, advice: dict[str, Any], now: datetime
+    ) -> dict[str, Any]:
+        """Limit robot mower advice to 08:00-18:00 while keeping live factors."""
+        in_lock_window = LOCK_START_HOUR <= now.hour < LOCK_END_HOUR
+        robot = advice["robot_mower_should_run"]
+        attrs = robot.get("attributes", {})
+
+        if in_lock_window:
+            robot["attributes"] = {
+                **attrs,
+                "time_window_active": True,
+                "window_start": _iso_at(now, LOCK_START_HOUR),
+                "window_end": _iso_at(now, LOCK_END_HOUR),
+                "next_window_start": _next_lock_start(now).isoformat(),
+            }
+        else:
+            blocking_factors = list(attrs.get("blocking_factors", []))
+            blocking_factors.append("Robot mower window is 08:00-18:00.")
+            robot["value"] = False
+            robot["attributes"] = {
+                **attrs,
+                "blocking_factors": blocking_factors,
+                "reason": "Robot mower is outside the configured 08:00-18:00 window.",
+                "time_window_active": False,
+                "window_start": _iso_at(now, LOCK_START_HOUR),
+                "window_end": _iso_at(now, LOCK_END_HOUR),
+                "next_window_start": _next_lock_start(now).isoformat(),
+            }
+
+        return advice
 
     async def _async_get_forecast(self) -> list[dict[str, Any]]:
         """Fetch forecast data from the configured weather entity."""
@@ -155,3 +284,18 @@ def _forecast_precipitation(forecast: list[dict[str, Any]]) -> float | None:
             found = True
 
     return total if found else None
+
+
+def _iso_at(now: datetime, hour: int) -> str:
+    """Return an ISO timestamp for today at the given hour."""
+    return now.replace(hour=hour, minute=0, second=0, microsecond=0).isoformat()
+
+
+def _next_lock_start(now: datetime) -> datetime:
+    """Return the next 08:00 local lock time."""
+    next_start = now.replace(
+        hour=LOCK_START_HOUR, minute=0, second=0, microsecond=0
+    )
+    if now >= next_start:
+        next_start += timedelta(days=1)
+    return next_start
