@@ -9,7 +9,6 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
@@ -78,8 +77,11 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     blocking=True,
                     return_response=True,
                 )
-            except HomeAssistantError as err:
+            except Exception as err:  # noqa: BLE001
                 LOGGER.debug("Could not fetch %s forecast: %s", forecast_type, err)
+                continue
+
+            if not isinstance(response, dict):
                 continue
 
             forecast = response.get(entity_id, {}).get("forecast", [])

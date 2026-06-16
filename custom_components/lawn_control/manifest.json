@@ -4,10 +4,9 @@
   "codeowners": [],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/rasmusholt/Lawn-Control",
-  "integration_type": "helper",
+  "documentation": "https://github.com/Ralleberg/lawn_control",
   "iot_class": "calculated",
-  "issue_tracker": "https://github.com/rasmusholt/Lawn-Control/issues",
+  "issue_tracker": "https://github.com/Ralleberg/lawn_control/issues",
   "requirements": [],
-  "version": "0.1.0"
+  "version": "0.1.1"
 }
