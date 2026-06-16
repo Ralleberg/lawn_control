@@ -45,9 +45,6 @@ from .const import (
 def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     """Return the config/options schema."""
     defaults = defaults or {}
-    sensor_selector = selector.EntitySelector(
-        selector.EntitySelectorConfig(domain="sensor")
-    )
 
     return vol.Schema(
         {
@@ -60,20 +57,20 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             ),
             vol.Optional(
                 CONF_TEMPERATURE_SENSOR,
-                default=defaults.get(CONF_TEMPERATURE_SENSOR),
-            ): sensor_selector,
+                **_default_kwargs(defaults, CONF_TEMPERATURE_SENSOR),
+            ): _sensor_selector(),
             vol.Optional(
                 CONF_RAIN_SENSOR,
-                default=defaults.get(CONF_RAIN_SENSOR),
-            ): sensor_selector,
+                **_default_kwargs(defaults, CONF_RAIN_SENSOR),
+            ): _sensor_selector(),
             vol.Optional(
                 CONF_HUMIDITY_SENSOR,
-                default=defaults.get(CONF_HUMIDITY_SENSOR),
-            ): sensor_selector,
+                **_default_kwargs(defaults, CONF_HUMIDITY_SENSOR),
+            ): _sensor_selector(),
             vol.Optional(
                 CONF_SOIL_MOISTURE_SENSOR,
-                default=defaults.get(CONF_SOIL_MOISTURE_SENSOR),
-            ): sensor_selector,
+                **_default_kwargs(defaults, CONF_SOIL_MOISTURE_SENSOR),
+            ): _sensor_selector(),
             vol.Required(
                 CONF_LAWN_TYPE,
                 default=defaults.get(CONF_LAWN_TYPE, "regular"),
@@ -83,7 +80,7 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             vol.Required(
                 CONF_ROBOTIC_MOWER,
                 default=defaults.get(CONF_ROBOTIC_MOWER, False),
-            ): bool,
+            ): selector.BooleanSelector(),
             vol.Required(
                 CONF_SHADE_LEVEL,
                 default=defaults.get(CONF_SHADE_LEVEL, "low"),
@@ -125,7 +122,7 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             vol.Optional(
                 CONF_WATER_DURING_DROUGHT,
                 default=defaults.get(CONF_WATER_DURING_DROUGHT, False),
-            ): bool,
+            ): selector.BooleanSelector(),
             vol.Optional(
                 CONF_WATERING_LEVEL,
                 default=defaults.get(CONF_WATERING_LEVEL, "normal"),
@@ -169,6 +166,36 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     )
 
 
+def _default_kwargs(defaults: dict[str, Any], key: str) -> dict[str, Any]:
+    """Return selector default kwargs only when there is a real value."""
+    value = defaults.get(key)
+    if value in (None, ""):
+        return {}
+    return {"default": value}
+
+
+def _sensor_selector() -> selector.EntitySelector:
+    """Return a sensor entity selector."""
+    return selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
+
+
+def _clean_user_input(user_input: dict[str, Any]) -> dict[str, Any]:
+    """Remove empty optional fields and make defaults explicit."""
+    cleaned = {
+        key: value
+        for key, value in user_input.items()
+        if value not in (None, "")
+    }
+    cleaned.setdefault(CONF_ROBOTIC_MOWER, False)
+    cleaned.setdefault(CONF_WATER_DURING_DROUGHT, False)
+    cleaned.setdefault(CONF_WATERING_LEVEL, "normal")
+    cleaned.setdefault(CONF_FERTILIZER_N_PERCENT, 0)
+    cleaned.setdefault(CONF_FERTILIZER_P_PERCENT, 0)
+    cleaned.setdefault(CONF_FERTILIZER_K_PERCENT, 0)
+    cleaned.setdefault(CONF_DAYS_SINCE_FERTILIZER, DEFAULT_DAYS_SINCE_FERTILIZER)
+    return cleaned
+
+
 class LawnControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Lawn Control."""
 
@@ -181,11 +208,10 @@ class LawnControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            user_input = _clean_user_input(user_input)
             if user_input[CONF_MIN_GRASS_HEIGHT] >= user_input[CONF_MAX_GRASS_HEIGHT]:
                 errors["base"] = "height_range"
             else:
-                await self.async_set_unique_id(user_input[CONF_WEATHER_ENTITY])
-                self._abort_if_unique_id_configured()
                 return self.async_create_entry(
                     title=user_input[CONF_NAME],
                     data=user_input,
@@ -221,6 +247,7 @@ class LawnControlOptionsFlow(config_entries.OptionsFlow):
         current = {**self._config_entry.data, **self._config_entry.options}
 
         if user_input is not None:
+            user_input = _clean_user_input(user_input)
             if user_input[CONF_MIN_GRASS_HEIGHT] >= user_input[CONF_MAX_GRASS_HEIGHT]:
                 errors["base"] = "height_range"
             else:

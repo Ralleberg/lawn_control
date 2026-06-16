@@ -2,7 +2,7 @@
 
 Lawn Control is a Home Assistant custom integration that gives lawn care advice from a weather entity, forecast data and optional real sensors for rain, temperature, humidity and soil moisture.
 
-Version `0.1.1` is advisory only. It exposes a robot mower permission entity,
+Version `0.1.2` is advisory only. It exposes a robot mower permission entity,
 but it does not send commands to mower hardware.
 
 ## Entities
@@ -33,7 +33,7 @@ Add the integration from Home Assistant's integrations UI. The config flow asks 
 
 ## Rule Approach
 
-The rule engine is intentionally simple in `0.1.1`. It uses transparent scoring and blocking checks for:
+The rule engine is intentionally simple in `0.1.2`. It uses transparent scoring and blocking checks for:
 
 - Higher grass during summer stress, shade and wear.
 - Drought risk from rain, forecast rain, temperature, humidity, soil moisture, soil type and season.
