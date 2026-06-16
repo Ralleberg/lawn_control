@@ -16,6 +16,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_DAILY_UPDATE_HOUR,
     CONF_DAYS_SINCE_FERTILIZER,
     CONF_HUMIDITY_SENSOR,
     CONF_LAST_FERTILIZED_DATE,
@@ -23,6 +24,7 @@ from .const import (
     CONF_SOIL_MOISTURE_SENSOR,
     CONF_TEMPERATURE_SENSOR,
     CONF_WEATHER_ENTITY,
+    DEFAULT_DAILY_UPDATE_HOUR,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
 )
@@ -30,7 +32,6 @@ from .rules.care import build_advice
 
 LOGGER = logging.getLogger(__name__)
 
-LOCK_START_HOUR = 8
 STORAGE_VERSION = 1
 WEATHER_HISTORY_HOURS = 24
 WEATHER_HISTORY_KEEP_HOURS = 48
@@ -76,7 +77,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             async_track_time_change(
                 self.hass,
                 self._async_refresh_from_schedule,
-                hour=LOCK_START_HOUR,
+                hour=self.daily_update_hour,
                 minute=0,
                 second=0,
             )
@@ -103,6 +104,13 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             config[CONF_DAYS_SINCE_FERTILIZER] = days_since_fertilizer
         return config
 
+    @property
+    def daily_update_hour(self) -> int:
+        """Return the configured daily update hour."""
+        return _valid_hour(
+            self.config.get(CONF_DAILY_UPDATE_HOUR), DEFAULT_DAILY_UPDATE_HOUR
+        )
+
     async def _async_update_data(self) -> dict[str, Any]:
         """Update all calculated advice."""
         forecast = await self._async_get_forecast()
@@ -122,29 +130,36 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Apply daily locks to selected advice values."""
         now = dt_util.now()
         date_key = now.date().isoformat()
+        lock_hour = self.daily_update_hour
         should_save = False
 
-        advice, saved = self._apply_grass_height_lock(advice, now, date_key)
+        advice, saved = self._apply_grass_height_lock(
+            advice, now, date_key, lock_hour
+        )
         should_save = should_save or saved
 
-        advice, saved = self._apply_robot_mower_lock(advice, now, date_key)
+        advice, saved = self._apply_robot_mower_lock(
+            advice, now, date_key, lock_hour
+        )
         should_save = should_save or saved
 
         return advice, should_save
 
     def _apply_grass_height_lock(
-        self, advice: dict[str, Any], now: datetime, date_key: str
+        self, advice: dict[str, Any], now: datetime, date_key: str, lock_hour: int
     ) -> tuple[dict[str, Any], bool]:
-        """Lock recommended grass height once per day from 08:00."""
+        """Lock recommended grass height once per day from the configured hour."""
         lock = self._stored_data.get("recommended_grass_height")
         should_save = False
 
-        if now.hour >= LOCK_START_HOUR and (
+        if now.hour >= lock_hour and (
             not lock or lock.get("date") != date_key
+            or lock.get("lock_hour") != lock_hour
         ):
             lock = {
                 "date": date_key,
-                "lock_time": _iso_at(now, LOCK_START_HOUR),
+                "lock_hour": lock_hour,
+                "lock_time": _iso_at(now, lock_hour),
                 "locked_at": now.isoformat(),
                 "data": deepcopy(advice["recommended_grass_height"]),
             }
@@ -159,7 +174,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "locked": True,
                 "lock_time": lock.get("lock_time", lock["locked_at"]),
                 "locked_at": lock["locked_at"],
-                "next_update": _next_lock_start(now).isoformat(),
+                "next_update": _next_lock_start(now, lock_hour).isoformat(),
                 "live_value": live["value"],
                 "live_min_height": live["attributes"]["min_height"],
                 "live_max_height": live["attributes"]["max_height"],
@@ -170,18 +185,20 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return advice, should_save
 
     def _apply_robot_mower_lock(
-        self, advice: dict[str, Any], now: datetime, date_key: str
+        self, advice: dict[str, Any], now: datetime, date_key: str, lock_hour: int
     ) -> tuple[dict[str, Any], bool]:
-        """Lock the robot mower decision once per day from 08:00."""
+        """Lock the robot mower decision once per day from the configured hour."""
         lock = self._stored_data.get("robot_mower_should_run")
         should_save = False
 
-        if now.hour >= LOCK_START_HOUR and (
+        if now.hour >= lock_hour and (
             not lock or lock.get("date") != date_key
+            or lock.get("lock_hour") != lock_hour
         ):
             lock = {
                 "date": date_key,
-                "lock_time": _iso_at(now, LOCK_START_HOUR),
+                "lock_hour": lock_hour,
+                "lock_time": _iso_at(now, lock_hour),
                 "locked_at": now.isoformat(),
                 "data": deepcopy(advice["robot_mower_should_run"]),
             }
@@ -196,7 +213,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "locked": True,
                 "lock_time": lock.get("lock_time", lock["locked_at"]),
                 "locked_at": lock["locked_at"],
-                "next_update": _next_lock_start(now).isoformat(),
+                "next_update": _next_lock_start(now, lock_hour).isoformat(),
                 "live_value": live["value"],
                 "live_blocking_factors": live["attributes"]["blocking_factors"],
                 "live_reason": live["attributes"]["reason"],
@@ -210,7 +227,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             advice["robot_mower_should_run"]["attributes"] = {
                 **advice["robot_mower_should_run"].get("attributes", {}),
                 "locked": False,
-                "next_update": _next_lock_start(now).isoformat(),
+                "next_update": _next_lock_start(now, lock_hour).isoformat(),
             }
 
         return advice, should_save
@@ -403,11 +420,23 @@ def _iso_at(now: datetime, hour: int) -> str:
     return now.replace(hour=hour, minute=0, second=0, microsecond=0).isoformat()
 
 
-def _next_lock_start(now: datetime) -> datetime:
-    """Return the next 08:00 local lock time."""
-    next_start = now.replace(
-        hour=LOCK_START_HOUR, minute=0, second=0, microsecond=0
-    )
+def _next_lock_start(now: datetime, hour: int) -> datetime:
+    """Return the next local lock time."""
+    next_start = now.replace(hour=hour, minute=0, second=0, microsecond=0)
     if now >= next_start:
         next_start += timedelta(days=1)
     return next_start
+
+
+def _valid_hour(value: Any, default: int) -> int:
+    """Return a whole hour between 0 and 23."""
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        return default
+
+    if not float(value).is_integer():
+        return default
+
+    hour = int(value)
+    if 0 <= hour <= 23:
+        return hour
+    return default

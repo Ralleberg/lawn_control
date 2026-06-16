@@ -14,6 +14,7 @@
           "soil_moisture_sensor": "Jordfugtighedssensor",
           "lawn_type": "Plænetype",
           "robotic_mower": "Robotplæneklipper",
+          "daily_update_hour": "Dagligt vurderingstidspunkt",
           "shade_level": "Skyggeniveau",
           "soil_type": "Jordtype",
           "care_level": "Plejeniveau",
@@ -27,12 +28,14 @@
           "last_fertilized_date": "Seneste gødningsdato"
         },
         "data_description": {
+          "daily_update_hour": "Vælg timen hvor dagens låste vurdering beregnes. Brug 0-23, for eksempel 8 for kl. 08:00.",
           "last_fertilized_date": "Indtast datoen hvor du sidst gødede i formatet YYYY-MM-DD, for eksempel 2026-05-20."
         }
       }
     },
     "error": {
       "height_range": "Minimum græshøjde skal være lavere end maksimum græshøjde.",
+      "invalid_hour": "Tidspunktet skal være en hel time fra 0 til 23.",
       "invalid_date": "Datoen skal skrives i formatet YYYY-MM-DD, for eksempel 2026-05-20."
     },
     "abort": {
@@ -53,6 +56,7 @@
           "soil_moisture_sensor": "Jordfugtighedssensor",
           "lawn_type": "Plænetype",
           "robotic_mower": "Robotplæneklipper",
+          "daily_update_hour": "Dagligt vurderingstidspunkt",
           "shade_level": "Skyggeniveau",
           "soil_type": "Jordtype",
           "care_level": "Plejeniveau",
@@ -66,12 +70,14 @@
           "last_fertilized_date": "Seneste gødningsdato"
         },
         "data_description": {
+          "daily_update_hour": "Vælg timen hvor dagens låste vurdering beregnes. Brug 0-23, for eksempel 8 for kl. 08:00.",
           "last_fertilized_date": "Indtast datoen hvor du sidst gødede i formatet YYYY-MM-DD, for eksempel 2026-05-20."
         }
       }
     },
     "error": {
       "height_range": "Minimum græshøjde skal være lavere end maksimum græshøjde.",
+      "invalid_hour": "Tidspunktet skal være en hel time fra 0 til 23.",
       "invalid_date": "Datoen skal skrives i formatet YYYY-MM-DD, for eksempel 2026-05-20."
     }
   },

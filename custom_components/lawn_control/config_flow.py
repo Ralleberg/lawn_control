@@ -15,6 +15,7 @@ from homeassistant.helpers import selector
 from .const import (
     CARE_LEVELS,
     CONF_CARE_LEVEL,
+    CONF_DAILY_UPDATE_HOUR,
     CONF_FERTILIZER_K_PERCENT,
     CONF_FERTILIZER_N_PERCENT,
     CONF_FERTILIZER_P_PERCENT,
@@ -32,6 +33,7 @@ from .const import (
     CONF_WATER_DURING_DROUGHT,
     CONF_WATERING_LEVEL,
     CONF_WEATHER_ENTITY,
+    DEFAULT_DAILY_UPDATE_HOUR,
     DEFAULT_MAX_GRASS_HEIGHT,
     DEFAULT_MIN_GRASS_HEIGHT,
     DOMAIN,
@@ -84,6 +86,20 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 CONF_ROBOTIC_MOWER,
                 default=defaults.get(CONF_ROBOTIC_MOWER, False),
             ): selector.BooleanSelector(),
+            vol.Required(
+                CONF_DAILY_UPDATE_HOUR,
+                default=defaults.get(
+                    CONF_DAILY_UPDATE_HOUR, DEFAULT_DAILY_UPDATE_HOUR
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0,
+                    max=23,
+                    step=1,
+                    mode=selector.NumberSelectorMode.SLIDER,
+                    unit_of_measurement="h",
+                )
+            ),
             vol.Required(
                 CONF_SHADE_LEVEL,
                 default=defaults.get(CONF_SHADE_LEVEL, "low"),
@@ -197,6 +213,7 @@ def _clean_user_input(user_input: dict[str, Any]) -> dict[str, Any]:
         if value not in (None, "")
     }
     cleaned.setdefault(CONF_ROBOTIC_MOWER, False)
+    cleaned.setdefault(CONF_DAILY_UPDATE_HOUR, DEFAULT_DAILY_UPDATE_HOUR)
     cleaned.setdefault(CONF_WATER_DURING_DROUGHT, False)
     cleaned.setdefault(CONF_WATERING_LEVEL, "normal")
     cleaned.setdefault(CONF_FERTILIZER_N_PERCENT, 0)
@@ -214,6 +231,13 @@ def _is_valid_date(value: str) -> bool:
     return True
 
 
+def _is_valid_hour(value: Any) -> bool:
+    """Return true if value is a whole hour between 0 and 23."""
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        return False
+    return float(value).is_integer() and 0 <= int(value) <= 23
+
+
 class LawnControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Lawn Control."""
 
@@ -229,6 +253,8 @@ class LawnControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             user_input = _clean_user_input(user_input)
             if user_input[CONF_MIN_GRASS_HEIGHT] >= user_input[CONF_MAX_GRASS_HEIGHT]:
                 errors["base"] = "height_range"
+            elif not _is_valid_hour(user_input.get(CONF_DAILY_UPDATE_HOUR)):
+                errors[CONF_DAILY_UPDATE_HOUR] = "invalid_hour"
             elif user_input.get(CONF_LAST_FERTILIZED_DATE) and not _is_valid_date(
                 user_input[CONF_LAST_FERTILIZED_DATE]
             ):
@@ -272,6 +298,8 @@ class LawnControlOptionsFlow(config_entries.OptionsFlow):
             user_input = _clean_user_input(user_input)
             if user_input[CONF_MIN_GRASS_HEIGHT] >= user_input[CONF_MAX_GRASS_HEIGHT]:
                 errors["base"] = "height_range"
+            elif not _is_valid_hour(user_input.get(CONF_DAILY_UPDATE_HOUR)):
+                errors[CONF_DAILY_UPDATE_HOUR] = "invalid_hour"
             elif user_input.get(CONF_LAST_FERTILIZED_DATE) and not _is_valid_date(
                 user_input[CONF_LAST_FERTILIZED_DATE]
             ):

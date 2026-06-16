@@ -14,6 +14,7 @@
           "soil_moisture_sensor": "Soil moisture sensor",
           "lawn_type": "Lawn type",
           "robotic_mower": "Robotic mower",
+          "daily_update_hour": "Daily assessment hour",
           "shade_level": "Shade level",
           "soil_type": "Soil type",
           "care_level": "Care level",
@@ -27,12 +28,14 @@
           "last_fertilized_date": "Last fertilized date"
         },
         "data_description": {
+          "daily_update_hour": "Choose the hour when the locked daily assessment is calculated. Use 0-23, for example 8 for 08:00.",
           "last_fertilized_date": "Enter the date you last applied fertilizer in YYYY-MM-DD format, for example 2026-05-20."
         }
       }
     },
     "error": {
       "height_range": "Minimum grass height must be lower than maximum grass height.",
+      "invalid_hour": "The time must be a whole hour from 0 to 23.",
       "invalid_date": "Date must use YYYY-MM-DD format, for example 2026-05-20."
     },
     "abort": {
@@ -53,6 +56,7 @@
           "soil_moisture_sensor": "Soil moisture sensor",
           "lawn_type": "Lawn type",
           "robotic_mower": "Robotic mower",
+          "daily_update_hour": "Daily assessment hour",
           "shade_level": "Shade level",
           "soil_type": "Soil type",
           "care_level": "Care level",
@@ -66,12 +70,14 @@
           "last_fertilized_date": "Last fertilized date"
         },
         "data_description": {
+          "daily_update_hour": "Choose the hour when the locked daily assessment is calculated. Use 0-23, for example 8 for 08:00.",
           "last_fertilized_date": "Enter the date you last applied fertilizer in YYYY-MM-DD format, for example 2026-05-20."
         }
       }
     },
     "error": {
       "height_range": "Minimum grass height must be lower than maximum grass height.",
+      "invalid_hour": "The time must be a whole hour from 0 to 23.",
       "invalid_date": "Date must use YYYY-MM-DD format, for example 2026-05-20."
     }
   },
