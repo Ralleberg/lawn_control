@@ -24,12 +24,12 @@ CONF_FERTILIZER_N_PERCENT = "fertilizer_n_percent"
 CONF_FERTILIZER_P_PERCENT = "fertilizer_p_percent"
 CONF_FERTILIZER_K_PERCENT = "fertilizer_k_percent"
 CONF_DAYS_SINCE_FERTILIZER = "days_since_fertilizer"
+CONF_LAST_FERTILIZED_DATE = "last_fertilized_date"
 
 DEFAULT_MIN_GRASS_HEIGHT = 35
 DEFAULT_MAX_GRASS_HEIGHT = 55
 DEFAULT_FERTILIZER_THRESHOLD = 65
 DEFAULT_UPDATE_INTERVAL = timedelta(minutes=30)
-DEFAULT_DAYS_SINCE_FERTILIZER = 90
 
 LAWN_TYPES = ["regular", "ornamental", "wear_tolerant", "shade"]
 SHADE_LEVELS = ["low", "medium", "high"]

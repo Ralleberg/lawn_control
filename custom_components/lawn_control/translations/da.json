@@ -24,12 +24,16 @@
           "fertilizer_n_percent": "Kvælstof i gødning",
           "fertilizer_p_percent": "Fosfor i gødning",
           "fertilizer_k_percent": "Kalium i gødning",
-          "days_since_fertilizer": "Dage siden gødning"
+          "last_fertilized_date": "Seneste gødningsdato"
+        },
+        "data_description": {
+          "last_fertilized_date": "Indtast datoen hvor du sidst gødede i formatet YYYY-MM-DD, for eksempel 2026-05-20."
         }
       }
     },
     "error": {
-      "height_range": "Minimum græshøjde skal være lavere end maksimum græshøjde."
+      "height_range": "Minimum græshøjde skal være lavere end maksimum græshøjde.",
+      "invalid_date": "Datoen skal skrives i formatet YYYY-MM-DD, for eksempel 2026-05-20."
     },
     "abort": {
       "already_configured": "Denne plæne er allerede konfigureret."
@@ -59,12 +63,16 @@
           "fertilizer_n_percent": "Kvælstof i gødning",
           "fertilizer_p_percent": "Fosfor i gødning",
           "fertilizer_k_percent": "Kalium i gødning",
-          "days_since_fertilizer": "Dage siden gødning"
+          "last_fertilized_date": "Seneste gødningsdato"
+        },
+        "data_description": {
+          "last_fertilized_date": "Indtast datoen hvor du sidst gødede i formatet YYYY-MM-DD, for eksempel 2026-05-20."
         }
       }
     },
     "error": {
-      "height_range": "Minimum græshøjde skal være lavere end maksimum græshøjde."
+      "height_range": "Minimum græshøjde skal være lavere end maksimum græshøjde.",
+      "invalid_date": "Datoen skal skrives i formatet YYYY-MM-DD, for eksempel 2026-05-20."
     }
   },
   "selector": {
@@ -202,6 +210,27 @@
           },
           "reason": {
             "name": "Årsag"
+          },
+          "water_during_drought": {
+            "name": "Vander i tørre perioder"
+          },
+          "watering_level": {
+            "name": "Vandingsniveau"
+          },
+          "n_percent": {
+            "name": "Kvælstof"
+          },
+          "p_percent": {
+            "name": "Fosfor"
+          },
+          "k_percent": {
+            "name": "Kalium"
+          },
+          "last_fertilized_date": {
+            "name": "Seneste gødningsdato"
+          },
+          "days_since_fertilizer": {
+            "name": "Dage siden gødning"
           }
         }
       },

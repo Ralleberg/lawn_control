@@ -24,12 +24,16 @@
           "fertilizer_n_percent": "Fertilizer nitrogen",
           "fertilizer_p_percent": "Fertilizer phosphorus",
           "fertilizer_k_percent": "Fertilizer potassium",
-          "days_since_fertilizer": "Days since fertilizer"
+          "last_fertilized_date": "Last fertilized date"
+        },
+        "data_description": {
+          "last_fertilized_date": "Enter the date you last applied fertilizer in YYYY-MM-DD format, for example 2026-05-20."
         }
       }
     },
     "error": {
-      "height_range": "Minimum grass height must be lower than maximum grass height."
+      "height_range": "Minimum grass height must be lower than maximum grass height.",
+      "invalid_date": "Date must use YYYY-MM-DD format, for example 2026-05-20."
     },
     "abort": {
       "already_configured": "This lawn is already configured."
@@ -59,12 +63,16 @@
           "fertilizer_n_percent": "Fertilizer nitrogen",
           "fertilizer_p_percent": "Fertilizer phosphorus",
           "fertilizer_k_percent": "Fertilizer potassium",
-          "days_since_fertilizer": "Days since fertilizer"
+          "last_fertilized_date": "Last fertilized date"
+        },
+        "data_description": {
+          "last_fertilized_date": "Enter the date you last applied fertilizer in YYYY-MM-DD format, for example 2026-05-20."
         }
       }
     },
     "error": {
-      "height_range": "Minimum grass height must be lower than maximum grass height."
+      "height_range": "Minimum grass height must be lower than maximum grass height.",
+      "invalid_date": "Date must use YYYY-MM-DD format, for example 2026-05-20."
     }
   },
   "selector": {
@@ -202,6 +210,27 @@
           },
           "reason": {
             "name": "Reason"
+          },
+          "water_during_drought": {
+            "name": "Water during dry periods"
+          },
+          "watering_level": {
+            "name": "Watering level"
+          },
+          "n_percent": {
+            "name": "Nitrogen"
+          },
+          "p_percent": {
+            "name": "Phosphorus"
+          },
+          "k_percent": {
+            "name": "Potassium"
+          },
+          "last_fertilized_date": {
+            "name": "Last fertilized date"
+          },
+          "days_since_fertilizer": {
+            "name": "Days since fertilizer"
           }
         }
       },

@@ -4,7 +4,7 @@
 
 Lawn Control is a Home Assistant custom integration that gives lawn care advice from a weather entity, forecast data and optional real sensors for rain, temperature, humidity and soil moisture.
 
-Version `0.1.9` is advisory only. It exposes a robot mower permission entity,
+Version `0.2.0` is advisory only. It exposes a robot mower permission entity,
 but it does not send commands to mower hardware.
 
 ## Entities
@@ -31,7 +31,7 @@ Add the integration from Home Assistant's integrations UI. The config flow asks 
 - Care level
 - Minimum and maximum grass height
 - Whether you water during dry periods, and the watering level
-- Optional NPK fertilizer percentages and days since fertilizer
+- Optional NPK fertilizer percentages and latest fertilizer date in `YYYY-MM-DD` format, for example `2026-05-20`
 
 ## Rule Approach
 
@@ -42,6 +42,7 @@ The rule engine is intentionally simple in `0.1.8`. It uses transparent scoring 
 - Watering during dry periods reduces drought stress and can support growth after dry weather.
 - Growth rate from season, temperature and drought stress.
 - Extra expected growth from recent NPK fertilizer, mainly driven by nitrogen and reduced over time.
+- Fertilizer age is calculated automatically from the latest fertilizer date on every update.
 - Fertilizer suitability from season, growth, drought stress, heat and rain forecast.
 - Mowing suitability from wet conditions, drought risk, growth rate and forecast rain.
 - Robot mower run permission from mowing suitability, recent weather history, wet grass, rain forecast, drought stress and growth.

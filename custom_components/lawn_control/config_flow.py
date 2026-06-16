@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 import voluptuous as vol
@@ -14,12 +15,12 @@ from homeassistant.helpers import selector
 from .const import (
     CARE_LEVELS,
     CONF_CARE_LEVEL,
-    CONF_DAYS_SINCE_FERTILIZER,
     CONF_FERTILIZER_K_PERCENT,
     CONF_FERTILIZER_N_PERCENT,
     CONF_FERTILIZER_P_PERCENT,
     CONF_HUMIDITY_SENSOR,
     CONF_LAWN_TYPE,
+    CONF_LAST_FERTILIZED_DATE,
     CONF_MAX_GRASS_HEIGHT,
     CONF_MIN_GRASS_HEIGHT,
     CONF_RAIN_SENSOR,
@@ -32,7 +33,6 @@ from .const import (
     CONF_WATERING_LEVEL,
     CONF_WEATHER_ENTITY,
     DEFAULT_MAX_GRASS_HEIGHT,
-    DEFAULT_DAYS_SINCE_FERTILIZER,
     DEFAULT_MIN_GRASS_HEIGHT,
     DOMAIN,
     LAWN_TYPES,
@@ -169,14 +169,9 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 )
             ),
             vol.Optional(
-                CONF_DAYS_SINCE_FERTILIZER,
-                default=defaults.get(
-                    CONF_DAYS_SINCE_FERTILIZER,
-                    DEFAULT_DAYS_SINCE_FERTILIZER,
-                ),
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=365, step=1)
-            ),
+                CONF_LAST_FERTILIZED_DATE,
+                **_default_kwargs(defaults, CONF_LAST_FERTILIZED_DATE),
+            ): str,
         }
     )
 
@@ -207,8 +202,16 @@ def _clean_user_input(user_input: dict[str, Any]) -> dict[str, Any]:
     cleaned.setdefault(CONF_FERTILIZER_N_PERCENT, 0)
     cleaned.setdefault(CONF_FERTILIZER_P_PERCENT, 0)
     cleaned.setdefault(CONF_FERTILIZER_K_PERCENT, 0)
-    cleaned.setdefault(CONF_DAYS_SINCE_FERTILIZER, DEFAULT_DAYS_SINCE_FERTILIZER)
     return cleaned
+
+
+def _is_valid_date(value: str) -> bool:
+    """Return true if value is YYYY-MM-DD."""
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
 
 
 class LawnControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -226,6 +229,10 @@ class LawnControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             user_input = _clean_user_input(user_input)
             if user_input[CONF_MIN_GRASS_HEIGHT] >= user_input[CONF_MAX_GRASS_HEIGHT]:
                 errors["base"] = "height_range"
+            elif user_input.get(CONF_LAST_FERTILIZED_DATE) and not _is_valid_date(
+                user_input[CONF_LAST_FERTILIZED_DATE]
+            ):
+                errors[CONF_LAST_FERTILIZED_DATE] = "invalid_date"
             else:
                 return self.async_create_entry(
                     title=user_input[CONF_NAME],
@@ -265,6 +272,10 @@ class LawnControlOptionsFlow(config_entries.OptionsFlow):
             user_input = _clean_user_input(user_input)
             if user_input[CONF_MIN_GRASS_HEIGHT] >= user_input[CONF_MAX_GRASS_HEIGHT]:
                 errors["base"] = "height_range"
+            elif user_input.get(CONF_LAST_FERTILIZED_DATE) and not _is_valid_date(
+                user_input[CONF_LAST_FERTILIZED_DATE]
+            ):
+                errors[CONF_LAST_FERTILIZED_DATE] = "invalid_date"
             else:
                 return self.async_create_entry(title="", data=user_input)
 

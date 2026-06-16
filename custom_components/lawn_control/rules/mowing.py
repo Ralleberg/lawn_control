@@ -9,6 +9,7 @@ from ..const import (
     CONF_FERTILIZER_K_PERCENT,
     CONF_FERTILIZER_N_PERCENT,
     CONF_FERTILIZER_P_PERCENT,
+    CONF_LAST_FERTILIZED_DATE,
     CONF_ROBOTIC_MOWER,
     CONF_WATER_DURING_DROUGHT,
     CONF_WATERING_LEVEL,
@@ -78,6 +79,9 @@ def calculate_growth_rate(
     if not reasons:
         reasons.append(text["default_growth"])
 
+    watering_effect = _watering_effect_attributes(config)
+    npk_effect = _npk_effect_attributes(config)
+
     return {
         "value": rate,
         "attributes": {
@@ -85,8 +89,15 @@ def calculate_growth_rate(
             "estimated_mm_next_7_days": round(estimated * 7, 1),
             "watering_growth_bonus_mm_per_day": watering_bonus,
             "fertilizer_growth_bonus_mm_per_day": fertilizer_bonus,
-            "watering_effect": _watering_effect_attributes(config),
-            "npk_effect": _npk_effect_attributes(config),
+            "water_during_drought": watering_effect["water_during_drought"],
+            "watering_level": watering_effect["watering_level"],
+            "n_percent": npk_effect["n_percent"],
+            "p_percent": npk_effect["p_percent"],
+            "k_percent": npk_effect["k_percent"],
+            "last_fertilized_date": npk_effect["last_fertilized_date"],
+            "days_since_fertilizer": npk_effect["days_since_fertilizer"],
+            "watering_effect": watering_effect,
+            "npk_effect": npk_effect,
             "reason": " ".join(reasons),
         },
     }
@@ -281,6 +292,7 @@ def _npk_effect_attributes(config: dict[str, Any]) -> dict[str, Any]:
         "n_percent": _float_config(config, CONF_FERTILIZER_N_PERCENT),
         "p_percent": _float_config(config, CONF_FERTILIZER_P_PERCENT),
         "k_percent": _float_config(config, CONF_FERTILIZER_K_PERCENT),
+        "last_fertilized_date": config.get(CONF_LAST_FERTILIZED_DATE),
         "days_since_fertilizer": _float_config(
             config, CONF_DAYS_SINCE_FERTILIZER, default=90
         ),

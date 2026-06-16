@@ -16,7 +16,9 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_DAYS_SINCE_FERTILIZER,
     CONF_HUMIDITY_SENSOR,
+    CONF_LAST_FERTILIZED_DATE,
     CONF_RAIN_SENSOR,
     CONF_SOIL_MOISTURE_SENSOR,
     CONF_TEMPERATURE_SENSOR,
@@ -93,7 +95,13 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @property
     def config(self) -> dict[str, Any]:
         """Return merged config entry data and options."""
-        return {**self.entry.data, **self.entry.options}
+        config = {**self.entry.data, **self.entry.options}
+        days_since_fertilizer = _days_since_date(
+            config.get(CONF_LAST_FERTILIZED_DATE), dt_util.now()
+        )
+        if days_since_fertilizer is not None:
+            config[CONF_DAYS_SINCE_FERTILIZER] = days_since_fertilizer
+        return config
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Update all calculated advice."""
@@ -375,6 +383,19 @@ def _max_value(values: Any) -> float | None:
     if not numbers:
         return None
     return round(max(numbers), 1)
+
+
+def _days_since_date(value: Any, now: datetime) -> int | None:
+    """Return days since a YYYY-MM-DD date."""
+    if not isinstance(value, str) or not value:
+        return None
+
+    try:
+        fertilized_date = datetime.fromisoformat(value).date()
+    except ValueError:
+        return None
+
+    return max(0, (now.date() - fertilized_date).days)
 
 
 def _iso_at(now: datetime, hour: int) -> str:
