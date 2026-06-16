@@ -25,7 +25,9 @@ if TYPE_CHECKING:
     from ..coordinator import LawnWeatherData
 
 
-def build_advice(config: dict[str, Any], weather: LawnWeatherData) -> dict[str, Any]:
+def build_advice(
+    config: dict[str, Any], weather: LawnWeatherData, language: str
+) -> dict[str, Any]:
     """Build all lawn advice from config and weather inputs."""
     height = recommended_grass_height(config, weather)
     drought = calculate_drought_risk(config, weather)
@@ -35,7 +37,9 @@ def build_advice(config: dict[str, Any], weather: LawnWeatherData) -> dict[str, 
     robot_mower = calculate_robot_mower_advice(
         config, weather, drought, growth, mowing
     )
-    recommendation = general_recommendation(drought, fertilizer, mowing, growth)
+    recommendation = general_recommendation(
+        drought, fertilizer, mowing, growth, language
+    )
 
     return {
         "recommended_grass_height": height,
@@ -108,23 +112,25 @@ def general_recommendation(
     fertilizer: dict[str, Any],
     mowing: dict[str, Any],
     growth: dict[str, Any],
+    language: str,
 ) -> dict[str, Any]:
     """Create a short human-readable recommendation."""
     actions: list[str] = []
     reasons: list[str] = []
+    text = _texts(language)
 
     if drought["value"] in ("high", "critical"):
-        actions.append("Prioritize watering and avoid stressing the lawn.")
-        reasons.append(f"Drought risk is {drought['value']}.")
+        actions.append(text["water"])
+        reasons.append(text["drought"].format(risk=text[drought["value"]]))
     if mowing["value"]:
-        actions.append("Mowing is suitable today.")
-        reasons.append(mowing["attributes"]["reason"])
+        actions.append(text["mow"])
+        reasons.append(text["mow_reason"])
     if fertilizer["score"] >= fertilizer["threshold"] and not fertilizer["blocking_factors"]:
-        actions.append("Fertilizer conditions are favorable.")
-        reasons.append(f"Fertilizer score is {fertilizer['score']}.")
+        actions.append(text["fertilize"])
+        reasons.append(text["fertilizer_score"].format(score=fertilizer["score"]))
     if not actions:
-        actions.append("Keep monitoring conditions.")
-        reasons.append(f"Growth is {growth['value']} and no major action is recommended.")
+        actions.append(text["monitor"])
+        reasons.append(text["growth"].format(growth=text[growth["value"]]))
 
     return {
         "value": " ".join(actions),
@@ -132,4 +138,46 @@ def general_recommendation(
             "actions": actions,
             "reason": " ".join(reasons),
         },
+    }
+
+
+def _texts(language: str) -> dict[str, str]:
+    """Return localized rule text."""
+    if language.lower().startswith("da"):
+        return {
+            "water": "Prioriter vanding og undgå at stresse plænen.",
+            "drought": "Tørkerisikoen er {risk}.",
+            "mow": "Det er egnet at slå græs i dag.",
+            "mow_reason": "Forholdene er tørre nok, og væksten understøtter klipning.",
+            "fertilize": "Forholdene er gode til gødning.",
+            "fertilizer_score": "Gødningsscoren er {score}.",
+            "monitor": "Hold øje med forholdene.",
+            "growth": "Væksten er {growth}, og der anbefales ingen større handling.",
+            "low": "lav",
+            "medium": "mellem",
+            "high": "høj",
+            "critical": "kritisk",
+            "stopped": "stoppet",
+            "slow": "langsom",
+            "normal": "normal",
+            "fast": "hurtig",
+        }
+
+    return {
+        "water": "Prioritize watering and avoid stressing the lawn.",
+        "drought": "Drought risk is {risk}.",
+        "mow": "Mowing is suitable today.",
+        "mow_reason": "Conditions are dry enough and growth supports regular mowing.",
+        "fertilize": "Fertilizer conditions are favorable.",
+        "fertilizer_score": "Fertilizer score is {score}.",
+        "monitor": "Keep monitoring conditions.",
+        "growth": "Growth is {growth} and no major action is recommended.",
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "critical": "critical",
+        "stopped": "stopped",
+        "slow": "slow",
+        "normal": "normal",
+        "fast": "fast",
     }

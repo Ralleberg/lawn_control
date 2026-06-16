@@ -61,7 +61,8 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Update all calculated advice."""
         forecast = await self._async_get_forecast()
         weather_data = self._read_weather_data(forecast)
-        return build_advice(self.config, weather_data)
+        language = getattr(self.hass.config, "language", "en")
+        return build_advice(self.config, weather_data, language)
 
     async def _async_get_forecast(self) -> list[dict[str, Any]]:
         """Fetch forecast data from the configured weather entity."""
