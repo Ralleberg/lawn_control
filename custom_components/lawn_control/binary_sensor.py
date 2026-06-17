@@ -16,7 +16,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import CONF_ROBOTIC_MOWER, DOMAIN
 from .coordinator import LawnControlCoordinator
 
 
@@ -71,9 +71,11 @@ async def async_setup_entry(
 ) -> None:
     """Set up Lawn Control binary sensors."""
     coordinator: LawnControlCoordinator = hass.data[DOMAIN][entry.entry_id]
+    config = {**entry.data, **entry.options}
     async_add_entities(
         LawnControlBinarySensor(coordinator, entry, description)
         for description in BINARY_SENSORS
+        if description.key != "should_mow" or not config.get(CONF_ROBOTIC_MOWER)
     )
 
 
