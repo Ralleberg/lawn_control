@@ -111,10 +111,17 @@ def _fertilizer_strength(config: dict[str, Any]) -> float:
     n = _float_config(config, CONF_FERTILIZER_N_PERCENT)
     p = _float_config(config, CONF_FERTILIZER_P_PERCENT)
     k = _float_config(config, CONF_FERTILIZER_K_PERCENT)
-    total = n + p + k
-    if total <= 0:
+
+    if n <= 0:
         return 0.0
-    return round(min(1.0, total / 30), 2)
+
+    nitrogen_factor = min(n / 20, 1.5)
+    complete_factor = 1.0
+    if p > 0:
+        complete_factor += 0.05
+    if k > 0:
+        complete_factor += 0.05
+    return round(min(1.0, nitrogen_factor * complete_factor), 2)
 
 
 def _float_config(config: dict[str, Any], key: str, default: float = 0.0) -> float:

@@ -4,14 +4,14 @@
 
 Lawn Control is a Home Assistant custom integration that gives lawn care advice from a weather entity, forecast data and optional real sensors for rain, temperature, humidity and soil moisture.
 
-Version `0.2.2` is advisory only. It exposes a robot mower permission entity,
+Version `0.2.3` is advisory only. It exposes a robot mower permission entity,
 but it does not send commands to mower hardware.
 
 ## Entities
 
 - `sensor.lawn_recommended_grass_height`: target grass height in millimeters with `min_height`, `max_height` and `reason` attributes.
 - `sensor.lawn_drought_risk`: `low`, `medium`, `high` or `critical`, with score details.
-- `sensor.lawn_growth_rate`: `stopped`, `slow`, `normal` or `fast`, with estimated millimeters per day and next 7 days.
+- `sensor.lawn_growth_rate`: `stopped`, `slow`, `normal` or `fast`, with estimated millimeters per day, next 7 days and fertilizer growth factors.
 - `sensor.lawn_fertilizer_score`: estimated remaining fertilizer effect from 0 to 100 with scoring details.
 - `binary_sensor.lawn_good_day_for_fertilizer`: on when the fertilizer need score is below 40 and blocking checks allow fertilizing.
 - `binary_sensor.lawn_should_mow`: locked once per day to show whether mowing is recommended today.
@@ -37,13 +37,13 @@ Add the integration from Home Assistant's integrations UI. The config flow asks 
 
 ## Rule Approach
 
-The rule engine is intentionally simple in `0.2.2`. It uses transparent scoring and blocking checks for:
+The rule engine is intentionally simple in `0.2.3`. It uses transparent scoring and blocking checks for:
 
 - Higher grass during summer stress, shade and wear.
 - Drought risk from observed rain, recent rain history, forecast rain, temperature, humidity, soil moisture, soil type and season.
 - Watering during dry periods reduces drought stress and can support growth after dry weather.
 - Growth rate from season, temperature and drought stress.
-- Extra expected growth from recent NPK fertilizer, mainly driven by nitrogen and reduced over time.
+- Extra expected growth from recent NPK fertilizer, driven by nitrogen, NPK completeness, fertilizer age and moisture from rain, forecast rain, soil moisture or configured watering.
 - Fertilizer score from latest fertilizer date and NPK strength, calculated automatically on every update.
 - Fertilizer blocking checks from season, growth, drought stress, heat and rain forecast.
 - Mowing suitability from wet conditions, drought risk, growth rate and forecast rain.

@@ -190,6 +190,18 @@
           "fertilizer_growth_bonus_mm_per_day": {
             "name": "Vækstbonus fra gødning"
           },
+          "fertilizer_residual_score": {
+            "name": "Resterende gødningsscore"
+          },
+          "fertilizer_strength": {
+            "name": "Gødningsstyrke"
+          },
+          "fertilizer_age_factor": {
+            "name": "Gødningsalder faktor"
+          },
+          "fertilizer_moisture_factor": {
+            "name": "Fugtfaktor for gødning"
+          },
           "watering_effect": {
             "name": "Vandingseffekt"
           },

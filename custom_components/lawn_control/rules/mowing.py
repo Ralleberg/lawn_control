@@ -61,7 +61,8 @@ def calculate_growth_rate(
         estimated += watering_bonus
         reasons.append(text["watering_bonus"].format(bonus=watering_bonus))
 
-    fertilizer_bonus = _fertilizer_growth_bonus(config, drought, weather)
+    fertilizer_effect = _fertilizer_growth_effect(config, drought, weather)
+    fertilizer_bonus = fertilizer_effect["bonus"]
     if fertilizer_bonus > 0:
         estimated += fertilizer_bonus
         reasons.append(text["fertilizer_bonus"].format(bonus=fertilizer_bonus))
@@ -81,7 +82,6 @@ def calculate_growth_rate(
 
     watering_effect = _watering_effect_attributes(config)
     npk_effect = _npk_effect_attributes(config)
-
     return {
         "value": rate,
         "attributes": {
@@ -96,6 +96,10 @@ def calculate_growth_rate(
             "k_percent": npk_effect["k_percent"],
             "last_fertilized_date": npk_effect["last_fertilized_date"],
             "days_since_fertilizer": npk_effect["days_since_fertilizer"],
+            "fertilizer_residual_score": fertilizer_effect["residual_score"],
+            "fertilizer_strength": fertilizer_effect["fertilizer_strength"],
+            "fertilizer_age_factor": fertilizer_effect["age_factor"],
+            "fertilizer_moisture_factor": fertilizer_effect["moisture_factor"],
             "watering_effect": watering_effect,
             "npk_effect": npk_effect,
             "reason": " ".join(reasons),
@@ -206,30 +210,32 @@ def calculate_robot_mower_advice(
     }
 
 
-def _fertilizer_growth_bonus(
+def _fertilizer_growth_effect(
     config: dict[str, Any],
     drought: dict[str, Any],
     weather: LawnWeatherData,
-) -> float:
-    """Estimate extra daily growth from recent NPK fertilizer."""
+) -> dict[str, float]:
+    """Return the fertilizer growth factors used by the growth rule."""
     if weather.month in (12, 1, 2):
-        return 0.0
+        return _empty_fertilizer_effect()
 
     if drought["value"] in ("high", "critical"):
-        return 0.0
+        return _empty_fertilizer_effect()
 
     if weather.temperature is not None and weather.temperature < 6:
-        return 0.0
+        return _empty_fertilizer_effect()
 
     n = _float_config(config, CONF_FERTILIZER_N_PERCENT)
     p = _float_config(config, CONF_FERTILIZER_P_PERCENT)
     k = _float_config(config, CONF_FERTILIZER_K_PERCENT)
     days = _float_config(config, CONF_DAYS_SINCE_FERTILIZER, default=90)
     if n <= 0 or days > 60:
-        return 0.0
+        return _empty_fertilizer_effect()
 
     age_factor = max(0.0, 1 - (days / 60))
-    nitrogen_factor = min(n / 20, 1.5)
+    fertilizer_strength = _fertilizer_strength(n, p, k)
+    residual_score = _fertilizer_residual_score(n, p, k, age_factor)
+    moisture_factor = _fertilizer_moisture_factor(config, weather)
     balance_factor = 1.0
 
     if p > 0 and k > 0:
@@ -237,7 +243,78 @@ def _fertilizer_growth_bonus(
     if n >= 25:
         balance_factor += 0.15
 
-    return round(min(2.5, 1.4 * nitrogen_factor * balance_factor * age_factor), 1)
+    bonus = min(
+        3.0,
+        1.8 * fertilizer_strength * balance_factor * age_factor * moisture_factor,
+    )
+    return {
+        "bonus": round(bonus, 1),
+        "residual_score": residual_score,
+        "fertilizer_strength": round(fertilizer_strength, 2),
+        "age_factor": round(age_factor, 2),
+        "moisture_factor": round(moisture_factor, 2),
+    }
+
+
+def _empty_fertilizer_effect() -> dict[str, float]:
+    """Return a zero fertilizer effect."""
+    return {
+        "bonus": 0.0,
+        "residual_score": 0.0,
+        "fertilizer_strength": 0.0,
+        "age_factor": 0.0,
+        "moisture_factor": 0.0,
+    }
+
+
+def _fertilizer_strength(n: float, p: float, k: float) -> float:
+    """Estimate relative growth strength from NPK percentages."""
+    nitrogen_factor = min(n / 20, 1.5)
+    complete_factor = 1.0
+    if p > 0:
+        complete_factor += 0.05
+    if k > 0:
+        complete_factor += 0.05
+    return min(1.6, nitrogen_factor * complete_factor)
+
+
+def _fertilizer_residual_score(
+    n: float, p: float, k: float, age_factor: float
+) -> float:
+    """Estimate remaining fertilizer effect on the same 0-100 scale as the score."""
+    strength = min(1.0, _fertilizer_strength(n, p, k))
+    return round(100 * strength * age_factor)
+
+
+def _fertilizer_moisture_factor(
+    config: dict[str, Any], weather: LawnWeatherData
+) -> float:
+    """Estimate whether moisture can activate fertilizer for growth."""
+    if weather.soil_moisture is not None:
+        if weather.soil_moisture < 25:
+            return 0.65
+        if weather.soil_moisture > 45:
+            return 1.2
+
+    if weather.weather_state in ("rainy", "pouring", "lightning-rainy"):
+        return 1.2
+
+    if weather.recent_rain is not None:
+        if weather.recent_rain >= 2:
+            return 1.2
+        if weather.recent_rain == 0:
+            return 0.85
+
+    if weather.forecast_rain is not None:
+        if 2 <= weather.forecast_rain <= 12:
+            return 1.15
+        if weather.forecast_rain > 20:
+            return 0.9
+
+    if config.get(CONF_WATER_DURING_DROUGHT):
+        return 1.1
+
+    return 1.0
 
 
 def _drought_growth_penalty(config: dict[str, Any], drought: dict[str, Any]) -> float:

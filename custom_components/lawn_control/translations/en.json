@@ -190,6 +190,18 @@
           "fertilizer_growth_bonus_mm_per_day": {
             "name": "Fertilizer growth bonus"
           },
+          "fertilizer_residual_score": {
+            "name": "Remaining fertilizer score"
+          },
+          "fertilizer_strength": {
+            "name": "Fertilizer strength"
+          },
+          "fertilizer_age_factor": {
+            "name": "Fertilizer age factor"
+          },
+          "fertilizer_moisture_factor": {
+            "name": "Fertilizer moisture factor"
+          },
           "watering_effect": {
             "name": "Watering effect"
           },
