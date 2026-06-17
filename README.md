@@ -4,7 +4,7 @@
 
 Lawn Control is a Home Assistant custom integration that gives lawn care advice from a weather entity, forecast data and optional real sensors for rain, temperature, humidity and soil moisture.
 
-Version `1.1.0` is advisory only. It exposes a robot mower permission entity,
+Version `1.1.1` is advisory only. It exposes a robot mower permission entity,
 but it does not send commands to mower hardware.
 
 ## Entities
@@ -37,15 +37,15 @@ Add the integration from Home Assistant's integrations UI. The config flow asks 
 
 ## Rule Approach
 
-The rule engine is intentionally simple in `1.1.0`. It uses transparent scoring and blocking checks for:
+The rule engine is intentionally simple in `1.1.1`. It uses transparent scoring and blocking checks for:
 
 - Higher grass during summer stress, shade and wear.
 - Drought risk from observed rain, recent rain history, forecast rain, temperature, humidity, soil moisture, soil type and season.
 - Watering during dry periods reduces drought stress and can support growth after dry weather.
 - Growth rate from season, temperature and drought stress.
 - Extra expected growth from recent NPK fertilizer, driven by nitrogen, NPK completeness, fertilizer age and moisture from rain, forecast rain, soil moisture or configured watering.
-- Fertilizer score from latest fertilizer date and NPK strength, calculated automatically on every update.
-- Fertilizer blocking checks from season, growth, drought stress, heat and rain forecast.
+- Fertilizer score from latest fertilizer date and NPK strength, calculated automatically on every update and changing only as fertilizer age changes.
+- Fertilizer blocking checks from season, growth, drought stress, heat and rain forecast. These can change live, but they do not change the fertilizer score value.
 - Mowing suitability from wet conditions, drought risk, growth rate and forecast rain.
 - Daily mowing plan from mowing suitability, recent weather history, wet grass, rain forecast, drought stress and growth.
 - Robot mower run permission from the current live mowing suitability and mower-specific blockers.
