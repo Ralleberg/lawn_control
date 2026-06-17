@@ -18,7 +18,7 @@ def calculate_drought_risk(
     details: dict[str, Any] = {}
     text = _texts(language)
 
-    recent_rain = weather.recent_rain
+    recent_rain = _best_recent_rain(weather.recent_rain, weather.historical_rain)
     forecast_rain = weather.forecast_rain
     temperature = weather.temperature
     humidity = weather.humidity
@@ -96,9 +96,21 @@ def calculate_drought_risk(
         "attributes": {
             "score": score,
             "details": details,
+            "recent_rain_used": recent_rain,
+            "historical_rain": weather.historical_rain,
             "reason": text["reason"].format(score=score),
         },
     }
+
+
+def _best_recent_rain(
+    current_rain: float | None, historical_rain: float | None
+) -> float | None:
+    """Use the highest observed rain from current and recent historical data."""
+    values = [value for value in (current_rain, historical_rain) if value is not None]
+    if not values:
+        return None
+    return max(values)
 
 
 def _watering_reduction(config: dict[str, Any]) -> int:

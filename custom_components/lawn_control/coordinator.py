@@ -133,23 +133,18 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         lock_hour = self.daily_update_hour
         should_save = False
 
-        advice, saved = self._apply_grass_height_lock(
-            advice, now, date_key, lock_hour
-        )
-        should_save = should_save or saved
-
-        advice, saved = self._apply_robot_mower_lock(
+        advice, saved = self._apply_should_mow_lock(
             advice, now, date_key, lock_hour
         )
         should_save = should_save or saved
 
         return advice, should_save
 
-    def _apply_grass_height_lock(
+    def _apply_should_mow_lock(
         self, advice: dict[str, Any], now: datetime, date_key: str, lock_hour: int
     ) -> tuple[dict[str, Any], bool]:
-        """Lock recommended grass height once per day from the configured hour."""
-        lock = self._stored_data.get("recommended_grass_height")
+        """Lock the mowing decision once per day from the configured hour."""
+        lock = self._stored_data.get("should_mow")
         should_save = False
 
         if now.hour >= lock_hour and (
@@ -161,52 +156,13 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "lock_hour": lock_hour,
                 "lock_time": _iso_at(now, lock_hour),
                 "locked_at": now.isoformat(),
-                "data": deepcopy(advice["recommended_grass_height"]),
+                "data": deepcopy(advice["should_mow"]),
             }
-            self._stored_data["recommended_grass_height"] = lock
+            self._stored_data["should_mow"] = lock
             should_save = True
 
         if lock:
-            live = deepcopy(advice["recommended_grass_height"])
-            locked = deepcopy(lock["data"])
-            locked["attributes"] = {
-                **locked.get("attributes", {}),
-                "locked": True,
-                "lock_time": lock.get("lock_time", lock["locked_at"]),
-                "locked_at": lock["locked_at"],
-                "next_update": _next_lock_start(now, lock_hour).isoformat(),
-                "live_value": live["value"],
-                "live_min_height": live["attributes"]["min_height"],
-                "live_max_height": live["attributes"]["max_height"],
-                "live_reason": live["attributes"]["reason"],
-            }
-            advice["recommended_grass_height"] = locked
-
-        return advice, should_save
-
-    def _apply_robot_mower_lock(
-        self, advice: dict[str, Any], now: datetime, date_key: str, lock_hour: int
-    ) -> tuple[dict[str, Any], bool]:
-        """Lock the robot mower decision once per day from the configured hour."""
-        lock = self._stored_data.get("robot_mower_should_run")
-        should_save = False
-
-        if now.hour >= lock_hour and (
-            not lock or lock.get("date") != date_key
-            or lock.get("lock_hour") != lock_hour
-        ):
-            lock = {
-                "date": date_key,
-                "lock_hour": lock_hour,
-                "lock_time": _iso_at(now, lock_hour),
-                "locked_at": now.isoformat(),
-                "data": deepcopy(advice["robot_mower_should_run"]),
-            }
-            self._stored_data["robot_mower_should_run"] = lock
-            should_save = True
-
-        if lock:
-            live = deepcopy(advice["robot_mower_should_run"])
+            live = deepcopy(advice["should_mow"])
             locked = deepcopy(lock["data"])
             locked["attributes"] = {
                 **locked.get("attributes", {}),
@@ -217,15 +173,11 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "live_value": live["value"],
                 "live_blocking_factors": live["attributes"]["blocking_factors"],
                 "live_reason": live["attributes"]["reason"],
-                "live_growth_rate": live["attributes"]["growth_rate"],
-                "live_estimated_mm_per_day": live["attributes"][
-                    "estimated_mm_per_day"
-                ],
             }
-            advice["robot_mower_should_run"] = locked
+            advice["should_mow"] = locked
         else:
-            advice["robot_mower_should_run"]["attributes"] = {
-                **advice["robot_mower_should_run"].get("attributes", {}),
+            advice["should_mow"]["attributes"] = {
+                **advice["should_mow"].get("attributes", {}),
                 "locked": False,
                 "next_update": _next_lock_start(now, lock_hour).isoformat(),
             }
@@ -270,6 +222,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         temperature = self._read_float_sensor(CONF_TEMPERATURE_SENSOR)
         humidity = self._read_float_sensor(CONF_HUMIDITY_SENSOR)
+        recent_rain = self._read_observed_rain(weather_attrs)
 
         return LawnWeatherData(
             weather_state=weather_state.state if weather_state else None,
@@ -279,7 +232,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             humidity=humidity
             if humidity is not None
             else _as_float(weather_attrs.get("humidity")),
-            recent_rain=self._read_float_sensor(CONF_RAIN_SENSOR),
+            recent_rain=recent_rain,
             soil_moisture=self._read_float_sensor(CONF_SOIL_MOISTURE_SENSOR),
             forecast_rain=_forecast_precipitation(forecast),
             forecast_condition=first_forecast.get("condition"),
@@ -300,6 +253,24 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return None
 
         return _as_float(state.state)
+
+    def _read_observed_rain(self, weather_attrs: dict[str, Any]) -> float | None:
+        """Read observed rain, preferring a real rain sensor over weather attributes."""
+        rain_sensor = self._read_float_sensor(CONF_RAIN_SENSOR)
+        if rain_sensor is not None:
+            return rain_sensor
+
+        for key in (
+            "precipitation",
+            "precipitation_today",
+            "rain",
+            "rainfall",
+        ):
+            rain = _as_float(weather_attrs.get(key))
+            if rain is not None:
+                return rain
+
+        return None
 
     def _update_weather_history(
         self, weather_data: LawnWeatherData

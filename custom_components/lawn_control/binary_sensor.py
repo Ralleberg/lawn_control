@@ -53,6 +53,14 @@ BINARY_SENSORS: tuple[LawnBinarySensorEntityDescription, ...] = (
         value_fn=lambda data: data["robot_mower_should_run"]["value"],
         attrs_fn=lambda data: data["robot_mower_should_run"]["attributes"],
     ),
+    LawnBinarySensorEntityDescription(
+        key="should_verticut",
+        translation_key="should_verticut",
+        name="Lawn Should Verticut",
+        icon="mdi:rake",
+        value_fn=lambda data: data["should_verticut"]["value"],
+        attrs_fn=lambda data: data["should_verticut"]["attributes"],
+    ),
 )
 
 

@@ -15,6 +15,7 @@ from ..const import (
 )
 from .drought import calculate_drought_risk
 from .fertilizer import calculate_fertilizer_score
+from .maintenance import calculate_verticut_advice
 from .mowing import (
     calculate_growth_rate,
     calculate_mowing_advice,
@@ -39,6 +40,7 @@ def build_advice(
     robot_mower = calculate_robot_mower_advice(
         config, weather, drought, growth, mowing, language
     )
+    verticut = calculate_verticut_advice(weather, drought, growth, language)
     recommendation = general_recommendation(
         drought, fertilizer, mowing, growth, language
     )
@@ -49,9 +51,10 @@ def build_advice(
         "growth_rate": growth,
         "fertilizer_score": fertilizer,
         "fertilizer_day": {
-            "value": fertilizer["score"] >= fertilizer["threshold"]
+            "value": fertilizer["score"] < fertilizer["threshold"]
             and not fertilizer["blocking_factors"],
             "attributes": {
+                "score": fertilizer["score"],
                 "threshold": fertilizer["threshold"],
                 "blocking_factors": fertilizer["blocking_factors"],
                 "reason": fertilizer["reason"],
@@ -59,6 +62,7 @@ def build_advice(
         },
         "should_mow": mowing,
         "robot_mower_should_run": robot_mower,
+        "should_verticut": verticut,
         "care_recommendation": recommendation,
     }
 
@@ -128,7 +132,10 @@ def general_recommendation(
     if mowing["value"]:
         actions.append(text["mow"])
         reasons.append(text["mow_reason"])
-    if fertilizer["score"] >= fertilizer["threshold"] and not fertilizer["blocking_factors"]:
+    if (
+        fertilizer["score"] < fertilizer["threshold"]
+        and not fertilizer["blocking_factors"]
+    ):
         actions.append(text["fertilize"])
         reasons.append(text["fertilizer_score"].format(score=fertilizer["score"]))
     if not actions:

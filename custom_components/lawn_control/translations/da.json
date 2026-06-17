@@ -14,7 +14,7 @@
           "soil_moisture_sensor": "Jordfugtighedssensor",
           "lawn_type": "Plænetype",
           "robotic_mower": "Robotplæneklipper",
-          "daily_update_hour": "Dagligt vurderingstidspunkt",
+          "daily_update_hour": "Dagligt klippetidspunkt",
           "shade_level": "Skyggeniveau",
           "soil_type": "Jordtype",
           "care_level": "Plejeniveau",
@@ -28,7 +28,7 @@
           "last_fertilized_date": "Seneste gødningsdato"
         },
         "data_description": {
-          "daily_update_hour": "Vælg timen hvor dagens låste vurdering beregnes. Brug 0-23, for eksempel 8 for kl. 08:00.",
+          "daily_update_hour": "Vælg timen hvor dagens klippevurdering låses. Brug 0-23, for eksempel 8 for kl. 08:00.",
           "last_fertilized_date": "Indtast datoen hvor du sidst gødede i formatet YYYY-MM-DD, for eksempel 2026-05-20."
         }
       }
@@ -56,7 +56,7 @@
           "soil_moisture_sensor": "Jordfugtighedssensor",
           "lawn_type": "Plænetype",
           "robotic_mower": "Robotplæneklipper",
-          "daily_update_hour": "Dagligt vurderingstidspunkt",
+          "daily_update_hour": "Dagligt klippetidspunkt",
           "shade_level": "Skyggeniveau",
           "soil_type": "Jordtype",
           "care_level": "Plejeniveau",
@@ -70,7 +70,7 @@
           "last_fertilized_date": "Seneste gødningsdato"
         },
         "data_description": {
-          "daily_update_hour": "Vælg timen hvor dagens låste vurdering beregnes. Brug 0-23, for eksempel 8 for kl. 08:00.",
+          "daily_update_hour": "Vælg timen hvor dagens klippevurdering låses. Brug 0-23, for eksempel 8 for kl. 08:00.",
           "last_fertilized_date": "Indtast datoen hvor du sidst gødede i formatet YYYY-MM-DD, for eksempel 2026-05-20."
         }
       }
@@ -140,30 +140,6 @@
           },
           "robotic_mower": {
             "name": "Robotplæneklipper"
-          },
-          "locked": {
-            "name": "Låst"
-          },
-          "lock_time": {
-            "name": "Låsetidspunkt"
-          },
-          "locked_at": {
-            "name": "Låst kl."
-          },
-          "next_update": {
-            "name": "Næste opdatering"
-          },
-          "live_value": {
-            "name": "Aktuel værdi"
-          },
-          "live_min_height": {
-            "name": "Aktuel minimum højde"
-          },
-          "live_max_height": {
-            "name": "Aktuel maksimum højde"
-          },
-          "live_reason": {
-            "name": "Aktuel årsag"
           }
         }
       },
@@ -181,6 +157,12 @@
           },
           "details": {
             "name": "Detaljer"
+          },
+          "recent_rain_used": {
+            "name": "Brugt seneste regn"
+          },
+          "historical_rain": {
+            "name": "Historisk regn"
           },
           "reason": {
             "name": "Årsag"
@@ -247,7 +229,7 @@
             "name": "Score"
           },
           "threshold": {
-            "name": "Grænseværdi"
+            "name": "Behovsgrænse"
           },
           "details": {
             "name": "Detaljer"
@@ -276,8 +258,11 @@
       "good_day_for_fertilizer": {
         "name": "God dag til gødning",
         "state_attributes": {
+          "score": {
+            "name": "Score"
+          },
           "threshold": {
-            "name": "Grænseværdi"
+            "name": "Behovsgrænse"
           },
           "blocking_factors": {
             "name": "Blokerende faktorer"
@@ -301,6 +286,27 @@
           },
           "reason": {
             "name": "Årsag"
+          },
+          "locked": {
+            "name": "Låst"
+          },
+          "lock_time": {
+            "name": "Låsetidspunkt"
+          },
+          "locked_at": {
+            "name": "Låst kl."
+          },
+          "next_update": {
+            "name": "Næste opdatering"
+          },
+          "live_value": {
+            "name": "Aktuel værdi"
+          },
+          "live_blocking_factors": {
+            "name": "Aktuelle blokerende faktorer"
+          },
+          "live_reason": {
+            "name": "Aktuel årsag"
           }
         }
       },
@@ -327,33 +333,20 @@
           },
           "reason": {
             "name": "Årsag"
+          }
+        }
+      },
+      "should_verticut": {
+        "name": "Bør vertikalskære",
+        "state_attributes": {
+          "calendar_months": {
+            "name": "Kalendermåneder"
           },
-          "locked": {
-            "name": "Låst"
+          "blocking_factors": {
+            "name": "Blokerende faktorer"
           },
-          "lock_time": {
-            "name": "Låsetidspunkt"
-          },
-          "locked_at": {
-            "name": "Låst kl."
-          },
-          "next_update": {
-            "name": "Næste opdatering"
-          },
-          "live_value": {
-            "name": "Aktuel værdi"
-          },
-          "live_blocking_factors": {
-            "name": "Aktuelle blokerende faktorer"
-          },
-          "live_reason": {
-            "name": "Aktuel årsag"
-          },
-          "live_growth_rate": {
-            "name": "Aktuel væksthastighed"
-          },
-          "live_estimated_mm_per_day": {
-            "name": "Aktuel estimeret vækst"
+          "reason": {
+            "name": "Årsag"
           }
         }
       }

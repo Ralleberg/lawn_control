@@ -14,7 +14,7 @@
           "soil_moisture_sensor": "Soil moisture sensor",
           "lawn_type": "Lawn type",
           "robotic_mower": "Robotic mower",
-          "daily_update_hour": "Daily assessment hour",
+          "daily_update_hour": "Daily mowing assessment hour",
           "shade_level": "Shade level",
           "soil_type": "Soil type",
           "care_level": "Care level",
@@ -28,7 +28,7 @@
           "last_fertilized_date": "Last fertilized date"
         },
         "data_description": {
-          "daily_update_hour": "Choose the hour when the locked daily assessment is calculated. Use 0-23, for example 8 for 08:00.",
+          "daily_update_hour": "Choose the hour when today's mowing recommendation is locked. Use 0-23, for example 8 for 08:00.",
           "last_fertilized_date": "Enter the date you last applied fertilizer in YYYY-MM-DD format, for example 2026-05-20."
         }
       }
@@ -56,7 +56,7 @@
           "soil_moisture_sensor": "Soil moisture sensor",
           "lawn_type": "Lawn type",
           "robotic_mower": "Robotic mower",
-          "daily_update_hour": "Daily assessment hour",
+          "daily_update_hour": "Daily mowing assessment hour",
           "shade_level": "Shade level",
           "soil_type": "Soil type",
           "care_level": "Care level",
@@ -70,7 +70,7 @@
           "last_fertilized_date": "Last fertilized date"
         },
         "data_description": {
-          "daily_update_hour": "Choose the hour when the locked daily assessment is calculated. Use 0-23, for example 8 for 08:00.",
+          "daily_update_hour": "Choose the hour when today's mowing recommendation is locked. Use 0-23, for example 8 for 08:00.",
           "last_fertilized_date": "Enter the date you last applied fertilizer in YYYY-MM-DD format, for example 2026-05-20."
         }
       }
@@ -140,30 +140,6 @@
           },
           "robotic_mower": {
             "name": "Robotic mower"
-          },
-          "locked": {
-            "name": "Locked"
-          },
-          "lock_time": {
-            "name": "Lock time"
-          },
-          "locked_at": {
-            "name": "Locked at"
-          },
-          "next_update": {
-            "name": "Next update"
-          },
-          "live_value": {
-            "name": "Live value"
-          },
-          "live_min_height": {
-            "name": "Live minimum height"
-          },
-          "live_max_height": {
-            "name": "Live maximum height"
-          },
-          "live_reason": {
-            "name": "Live reason"
           }
         }
       },
@@ -181,6 +157,12 @@
           },
           "details": {
             "name": "Details"
+          },
+          "recent_rain_used": {
+            "name": "Recent rain used"
+          },
+          "historical_rain": {
+            "name": "Historical rain"
           },
           "reason": {
             "name": "Reason"
@@ -247,7 +229,7 @@
             "name": "Score"
           },
           "threshold": {
-            "name": "Threshold"
+            "name": "Need threshold"
           },
           "details": {
             "name": "Details"
@@ -276,8 +258,11 @@
       "good_day_for_fertilizer": {
         "name": "Good day for fertilizer",
         "state_attributes": {
+          "score": {
+            "name": "Score"
+          },
           "threshold": {
-            "name": "Threshold"
+            "name": "Need threshold"
           },
           "blocking_factors": {
             "name": "Blocking factors"
@@ -301,6 +286,27 @@
           },
           "reason": {
             "name": "Reason"
+          },
+          "locked": {
+            "name": "Locked"
+          },
+          "lock_time": {
+            "name": "Lock time"
+          },
+          "locked_at": {
+            "name": "Locked at"
+          },
+          "next_update": {
+            "name": "Next update"
+          },
+          "live_value": {
+            "name": "Live value"
+          },
+          "live_blocking_factors": {
+            "name": "Live blocking factors"
+          },
+          "live_reason": {
+            "name": "Live reason"
           }
         }
       },
@@ -327,33 +333,20 @@
           },
           "reason": {
             "name": "Reason"
+          }
+        }
+      },
+      "should_verticut": {
+        "name": "Should scarify",
+        "state_attributes": {
+          "calendar_months": {
+            "name": "Calendar months"
           },
-          "locked": {
-            "name": "Locked"
+          "blocking_factors": {
+            "name": "Blocking factors"
           },
-          "lock_time": {
-            "name": "Lock time"
-          },
-          "locked_at": {
-            "name": "Locked at"
-          },
-          "next_update": {
-            "name": "Next update"
-          },
-          "live_value": {
-            "name": "Live value"
-          },
-          "live_blocking_factors": {
-            "name": "Live blocking factors"
-          },
-          "live_reason": {
-            "name": "Live reason"
-          },
-          "live_growth_rate": {
-            "name": "Live growth rate"
-          },
-          "live_estimated_mm_per_day": {
-            "name": "Live estimated growth"
+          "reason": {
+            "name": "Reason"
           }
         }
       }
