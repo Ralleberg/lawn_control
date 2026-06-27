@@ -12,6 +12,8 @@ from ..const import (
     CONF_ROBOTIC_MOWER,
     CONF_WATER_DURING_DROUGHT,
     CONF_WATERING_LEVEL,
+    FORECAST_RAIN_OK_MM,
+    HISTORICAL_RAIN_OK_MM,
 )
 
 if TYPE_CHECKING:
@@ -116,6 +118,9 @@ def calculate_mowing_advice(
     if weather.weather_state in ("rainy", "pouring", "lightning-rainy"):
         blocking_factors.append(text["wet_weather"])
 
+    if _low_water_balance(config, weather):
+        blocking_factors.append(text["mow_low_water"])
+
     if growth["value"] in ("stopped", "slow"):
         blocking_factors.append(text["limited_growth"])
 
@@ -162,6 +167,9 @@ def calculate_robot_mower_advice(
     if weather.historical_temperature is not None and weather.historical_temperature < 6:
         blocking_factors.append(text["history_cold"])
 
+    if _low_water_balance(config, weather):
+        blocking_factors.append(text["robot_low_water"])
+
     if weather.recent_rain is not None and weather.recent_rain >= 5:
         blocking_factors.append(text["robot_recent_rain"])
 
@@ -186,6 +194,8 @@ def calculate_robot_mower_advice(
             "blocking_factors": blocking_factors,
             "growth_rate": growth["value"],
             "estimated_mm_per_day": growth["attributes"]["estimated_mm_per_day"],
+            "historical_rain": weather.historical_rain,
+            "forecast_rain": weather.forecast_rain_5_days,
             "reason": reason,
         },
     }
@@ -361,6 +371,20 @@ def _float_config(config: dict[str, Any], key: str, default: float = 0.0) -> flo
         return default
 
 
+def _rain_reaches(value: float | None, threshold: int) -> bool:
+    """Return whether a rain value reaches the configured threshold."""
+    return value is not None and value >= threshold
+
+
+def _low_water_balance(config: dict[str, Any], weather: LawnWeatherData) -> bool:
+    """Return whether accumulated rain support is too low for mowing."""
+    return (
+        not config.get(CONF_WATER_DURING_DROUGHT)
+        and not _rain_reaches(weather.historical_rain, HISTORICAL_RAIN_OK_MM)
+        and not _rain_reaches(weather.forecast_rain_5_days, FORECAST_RAIN_OK_MM)
+    )
+
+
 def _texts(language: str) -> dict[str, str]:
     """Return localized mowing text."""
     if language.lower().startswith("da"):
@@ -379,6 +403,7 @@ def _texts(language: str) -> dict[str, str]:
             "recent_rain_wet": "Nylig regn kan efterlade græsset for vådt.",
             "forecast_rain": "Kraftig forecast-regn gør græsslåning mindre egnet.",
             "wet_weather": "Det aktuelle vejr er vådt.",
+            "mow_low_water": "Den akkumulerede regn og forecast-regn er for lav til græsslåning.",
             "limited_growth": "Væksten er for begrænset til at retfærdiggøre græsslåning.",
             "mow_ok": "Forholdene er tørre nok, og væksten understøtter græsslåning.",
             "mow_not_needed": "Græsslåning er ikke nødvendig i dag.",
@@ -387,6 +412,7 @@ def _texts(language: str) -> dict[str, str]:
             "history_rain": "Regnhistorikken tyder på vådt græs.",
             "history_humidity": "Fugtighedshistorikken tyder på langsom tørring.",
             "history_cold": "Temperaturhistorikken er for kold til klipning.",
+            "robot_low_water": "Den akkumulerede regn og forecast-regn er for lav til robotklipning.",
             "robot_recent_rain": "Nylig regn kan efterlade græsset for vådt til robotklipning.",
             "robot_forecast": "Forecast-regn gør robotklipning mindre egnet.",
             "robot_drought": "Undgå robotklipning under betydelig tørkestress.",
@@ -413,6 +439,7 @@ def _texts(language: str) -> dict[str, str]:
         "recent_rain_wet": "Recent rain may leave the grass too wet.",
         "forecast_rain": "Heavy forecast rain makes mowing less suitable.",
         "wet_weather": "Current weather is wet.",
+        "mow_low_water": "Accumulated rain and forecast rain are too low for mowing.",
         "limited_growth": "Growth is too limited to justify mowing.",
         "mow_ok": "Conditions are dry enough and growth supports regular mowing.",
         "mow_not_needed": "Mowing is not needed today.",
@@ -421,6 +448,7 @@ def _texts(language: str) -> dict[str, str]:
         "history_rain": "Recent rain history suggests wet grass.",
         "history_humidity": "Recent humidity history suggests slow drying.",
         "history_cold": "Recent temperature history is too cold for mowing.",
+        "robot_low_water": "Accumulated rain and forecast rain are too low for robot mowing.",
         "robot_recent_rain": "Recent rain can leave grass too wet for robot mowing.",
         "robot_forecast": "Forecast rain makes robot mowing less suitable.",
         "robot_drought": "Avoid robot mowing during significant drought stress.",

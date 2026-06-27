@@ -216,6 +216,12 @@
           "blocking_factors": {
             "name": "Blocking factors"
           },
+          "historical_rain": {
+            "name": "Historical rain"
+          },
+          "forecast_rain": {
+            "name": "Forecast rain"
+          },
           "reason": {
             "name": "Reason"
           }
@@ -285,6 +291,12 @@
           },
           "estimated_mm_per_day": {
             "name": "Estimated growth per day"
+          },
+          "historical_rain": {
+            "name": "Historical rain"
+          },
+          "forecast_rain": {
+            "name": "Forecast rain"
           },
           "reason": {
             "name": "Reason"

@@ -216,6 +216,12 @@
           "blocking_factors": {
             "name": "Blokerende faktorer"
           },
+          "historical_rain": {
+            "name": "Historisk regn"
+          },
+          "forecast_rain": {
+            "name": "Forecast-regn"
+          },
           "reason": {
             "name": "Årsag"
           }
@@ -285,6 +291,12 @@
           },
           "estimated_mm_per_day": {
             "name": "Estimeret vækst pr. dag"
+          },
+          "historical_rain": {
+            "name": "Historisk regn"
+          },
+          "forecast_rain": {
+            "name": "Forecast-regn"
           },
           "reason": {
             "name": "Årsag"

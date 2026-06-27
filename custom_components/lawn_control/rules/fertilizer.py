@@ -10,14 +10,12 @@ from ..const import (
     CONF_FERTILIZER_N_PERCENT,
     CONF_FERTILIZER_P_PERCENT,
     DEFAULT_FERTILIZER_NEED_THRESHOLD,
+    FORECAST_RAIN_OK_MM,
+    HISTORICAL_RAIN_OK_MM,
 )
 
 if TYPE_CHECKING:
     from ..coordinator import LawnWeatherData
-
-HISTORICAL_RAIN_OK_MM = 40
-FORECAST_RAIN_OK_MM = 20
-
 
 def calculate_fertilizer_score(
     config: dict[str, Any],

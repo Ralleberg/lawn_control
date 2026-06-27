@@ -11,13 +11,11 @@ from ..const import (
     CONF_SHADE_LEVEL,
     DEFAULT_MAX_GRASS_HEIGHT,
     DEFAULT_MIN_GRASS_HEIGHT,
-)
-from .drought import calculate_drought_risk
-from .fertilizer import (
     FORECAST_RAIN_OK_MM,
     HISTORICAL_RAIN_OK_MM,
-    calculate_fertilizer_score,
 )
+from .drought import calculate_drought_risk
+from .fertilizer import calculate_fertilizer_score
 from .maintenance import calculate_verticut_advice
 from .mowing import (
     calculate_growth_rate,
@@ -43,7 +41,7 @@ def build_advice(
     robot_mower = calculate_robot_mower_advice(
         config, weather, drought, growth, mowing, language
     )
-    verticut = calculate_verticut_advice(weather, drought, growth, language)
+    verticut = calculate_verticut_advice(config, weather, drought, growth, language)
     recommendation = general_recommendation(
         drought, fertilizer, mowing, growth, language
     )
