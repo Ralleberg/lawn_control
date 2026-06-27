@@ -210,8 +210,8 @@
           "forecast_rain": {
             "name": "Forecast rain"
           },
-          "rain_status": {
-            "name": "Rain status"
+          "moisture_status": {
+            "name": "Moisture status"
           },
           "blocking_factors": {
             "name": "Blocking factors"

@@ -4,11 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ..const import (
-    CONF_WATER_DURING_DROUGHT,
-    FORECAST_RAIN_OK_MM,
-    HISTORICAL_RAIN_OK_MM,
-)
+from .moisture import lacks_moisture_support
 
 if TYPE_CHECKING:
     from ..coordinator import LawnWeatherData
@@ -37,7 +33,7 @@ def calculate_verticut_advice(
     if growth["value"] == "stopped":
         blocking_factors.append(text["growth_stopped"])
 
-    if _soil_too_dry(config, weather):
+    if lacks_moisture_support(config, weather):
         blocking_factors.append(text["dry_soil"])
 
     if weather.recent_rain is not None and weather.recent_rain >= 8:
@@ -58,24 +54,6 @@ def calculate_verticut_advice(
             "reason": reason,
         },
     }
-
-
-def _soil_too_dry(config: dict[str, Any], weather: LawnWeatherData) -> bool:
-    """Return whether scarifying should be blocked because the soil is too dry."""
-    if config.get(CONF_WATER_DURING_DROUGHT):
-        return False
-
-    if weather.soil_moisture is not None:
-        return weather.soil_moisture < 25
-
-    return not _rain_reaches(
-        weather.historical_rain, HISTORICAL_RAIN_OK_MM
-    ) and not _rain_reaches(weather.forecast_rain_5_days, FORECAST_RAIN_OK_MM)
-
-
-def _rain_reaches(value: float | None, threshold: int) -> bool:
-    """Return whether a rain value reaches the configured threshold."""
-    return value is not None and value >= threshold
 
 
 def _texts(language: str) -> dict[str, str]:

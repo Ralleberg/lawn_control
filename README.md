@@ -45,11 +45,11 @@ The rule engine is intentionally simple in `1.1.2`. It uses transparent scoring 
 - Growth rate from season, temperature and drought stress.
 - Extra expected growth from recent NPK fertilizer, driven by nitrogen, NPK completeness, fertilizer age and moisture from rain, forecast rain, soil moisture or configured watering.
 - Fertilizer score from latest fertilizer date and NPK strength, calculated automatically on every update and changing only as fertilizer age changes.
-- Fertilizer blocking checks from season, growth, drought stress, heat and rain support. Fertilizing requires at least 20 mm observed rain in the last 5 days or at least 20 mm forecast rain in the next 5 days.
+- Fertilizer blocking checks from season, growth, drought stress, heat and shared moisture support from soil moisture, configured watering, at least 20 mm observed rain in the last 5 days or at least 20 mm forecast rain in the next 5 days.
 - Mowing suitability from wet conditions, drought risk, growth rate and forecast rain.
 - Daily mowing plan from mowing suitability, recent weather history, wet grass, rain forecast, drought stress and growth.
-- Robot mower run permission from the current live mowing suitability and mower-specific blockers.
-- Scarifying from the seasonal calendar, drought stress, growth and wet conditions.
+- Robot mower run permission from current mowing suitability, mower-specific blockers and the same moisture support check.
+- Scarifying from the seasonal calendar, drought stress, growth, wet conditions and the same moisture support check.
 
 Each advisory entity exposes the decision details in attributes so the result can be inspected and refined.
 

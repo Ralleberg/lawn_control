@@ -10,9 +10,8 @@ from ..const import (
     CONF_FERTILIZER_N_PERCENT,
     CONF_FERTILIZER_P_PERCENT,
     DEFAULT_FERTILIZER_NEED_THRESHOLD,
-    FORECAST_RAIN_OK_MM,
-    HISTORICAL_RAIN_OK_MM,
 )
+from .moisture import lacks_moisture_support, moisture_status
 
 if TYPE_CHECKING:
     from ..coordinator import LawnWeatherData
@@ -37,13 +36,9 @@ def calculate_fertilizer_score(
     if drought["value"] in ("high", "critical"):
         blocking_factors.append(text["drought_block"])
 
-    historical_rain_ok = _rain_reaches(weather.historical_rain, HISTORICAL_RAIN_OK_MM)
     forecast_rain = weather.forecast_rain_5_days
-    forecast_rain_ok = _rain_reaches(forecast_rain, FORECAST_RAIN_OK_MM)
-    rain_status = (
-        text["rain_supported"] if historical_rain_ok or forecast_rain_ok else text["rain_missing"]
-    )
-    if not historical_rain_ok and not forecast_rain_ok:
+    moisture = moisture_status(config, weather, language)
+    if lacks_moisture_support(config, weather):
         blocking_factors.append(text["rain_block"])
 
     if weather.temperature is not None and weather.temperature >= 28:
@@ -61,7 +56,7 @@ def calculate_fertilizer_score(
             "days_since_fertilizer": days_since_fertilizer,
             "historical_rain": weather.historical_rain,
             "forecast_rain": forecast_rain,
-            "rain_status": rain_status,
+            "moisture_status": moisture,
             "blocking_factors": blocking_factors,
             "reason": text["reason"].format(score=score),
         },
@@ -108,11 +103,6 @@ def _float_config(config: dict[str, Any], key: str, default: float = 0.0) -> flo
         return default
 
 
-def _rain_reaches(value: float | None, threshold: int) -> bool:
-    """Return whether a rain value reaches the configured threshold."""
-    return value is not None and value >= threshold
-
-
 def _texts(language: str) -> dict[str, str]:
     """Return localized fertilizer text."""
     if language.lower().startswith("da"):
@@ -123,9 +113,7 @@ def _texts(language: str) -> dict[str, str]:
             "winter_block": "Græsset kan sandsynligvis ikke udnytte gødning om vinteren.",
             "growth_stopped": "Væksten ser ud til at være stoppet.",
             "drought_block": "Undgå gødning under betydelig tørkestress.",
-            "rain_block": "Gødning kræver mindst 20 mm historisk regn de sidste 5 dage eller mindst 20 mm forecast-regn de næste 5 dage.",
-            "rain_supported": "regnkravet er opfyldt",
-            "rain_missing": "regnkravet er ikke opfyldt",
+            "rain_block": "Gødning kræver fugtig jord, vanding i tørre perioder eller mindst 20 mm regn historisk/forecast over 5 dage.",
             "heat_block": "Høj temperatur øger risikoen for svidning.",
             "sandy_soil": "sandet jord egner sig bedre til lettere doseringer",
             "reason": "Gødningsscore er {score} baseret på gødningsalder og NPK-styrke.",
@@ -143,9 +131,7 @@ def _texts(language: str) -> dict[str, str]:
         "winter_block": "Grass is unlikely to use fertilizer in winter.",
         "growth_stopped": "Growth appears stopped.",
         "drought_block": "Avoid fertilizer during significant drought stress.",
-        "rain_block": "Fertilizer requires at least 20 mm historical rain in the last 5 days or at least 20 mm forecast rain in the next 5 days.",
-        "rain_supported": "rain requirement is met",
-        "rain_missing": "rain requirement is not met",
+        "rain_block": "Fertilizer requires moist soil, watering during dry periods or at least 20 mm historical/forecast rain over 5 days.",
         "heat_block": "High temperature increases scorch risk.",
         "sandy_soil": "sandy soil favors lighter applications",
         "reason": "Fertilizer score is {score} from fertilizer age and NPK strength.",

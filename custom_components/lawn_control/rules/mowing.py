@@ -12,9 +12,8 @@ from ..const import (
     CONF_ROBOTIC_MOWER,
     CONF_WATER_DURING_DROUGHT,
     CONF_WATERING_LEVEL,
-    FORECAST_RAIN_OK_MM,
-    HISTORICAL_RAIN_OK_MM,
 )
+from .moisture import lacks_moisture_support
 
 if TYPE_CHECKING:
     from ..coordinator import LawnWeatherData
@@ -118,7 +117,7 @@ def calculate_mowing_advice(
     if weather.weather_state in ("rainy", "pouring", "lightning-rainy"):
         blocking_factors.append(text["wet_weather"])
 
-    if _low_water_balance(config, weather):
+    if lacks_moisture_support(config, weather):
         blocking_factors.append(text["mow_low_water"])
 
     if growth["value"] in ("stopped", "slow"):
@@ -167,7 +166,7 @@ def calculate_robot_mower_advice(
     if weather.historical_temperature is not None and weather.historical_temperature < 6:
         blocking_factors.append(text["history_cold"])
 
-    if _low_water_balance(config, weather):
+    if lacks_moisture_support(config, weather):
         blocking_factors.append(text["robot_low_water"])
 
     if weather.recent_rain is not None and weather.recent_rain >= 5:
@@ -369,20 +368,6 @@ def _float_config(config: dict[str, Any], key: str, default: float = 0.0) -> flo
         return float(config.get(key, default) or default)
     except (TypeError, ValueError):
         return default
-
-
-def _rain_reaches(value: float | None, threshold: int) -> bool:
-    """Return whether a rain value reaches the configured threshold."""
-    return value is not None and value >= threshold
-
-
-def _low_water_balance(config: dict[str, Any], weather: LawnWeatherData) -> bool:
-    """Return whether accumulated rain support is too low for mowing."""
-    return (
-        not config.get(CONF_WATER_DURING_DROUGHT)
-        and not _rain_reaches(weather.historical_rain, HISTORICAL_RAIN_OK_MM)
-        and not _rain_reaches(weather.forecast_rain_5_days, FORECAST_RAIN_OK_MM)
-    )
 
 
 def _texts(language: str) -> dict[str, str]:
