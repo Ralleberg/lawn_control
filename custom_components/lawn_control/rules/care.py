@@ -73,8 +73,14 @@ def recommended_grass_height(
     config: dict[str, Any], weather: LawnWeatherData, language: str
 ) -> dict[str, Any]:
     """Calculate a recommended grass height range."""
-    min_height = int(config.get(CONF_MIN_GRASS_HEIGHT, DEFAULT_MIN_GRASS_HEIGHT))
-    max_height = int(config.get(CONF_MAX_GRASS_HEIGHT, DEFAULT_MAX_GRASS_HEIGHT))
+    configured_min_height = int(
+        config.get(CONF_MIN_GRASS_HEIGHT, DEFAULT_MIN_GRASS_HEIGHT)
+    )
+    configured_max_height = int(
+        config.get(CONF_MAX_GRASS_HEIGHT, DEFAULT_MAX_GRASS_HEIGHT)
+    )
+    min_height = configured_min_height
+    max_height = configured_max_height
     reasons: list[str] = []
     text = _texts(language)
 
@@ -107,6 +113,13 @@ def recommended_grass_height(
     not_enough_rain = not historical_rain_ok and not forecast_rain_ok
     if not_enough_rain:
         reasons.append(text["low_rain_height"])
+
+    if max_height > configured_max_height:
+        max_height = configured_max_height
+        reasons.append(text["configured_max_cap"])
+
+    if min_height > max_height:
+        min_height = max_height
 
     if not reasons:
         reasons.append(text["configured_height"])
@@ -192,6 +205,7 @@ def _texts(language: str) -> dict[str, str]:
             "high_shade_height": "Meget skygge øger den anbefalede klippehøjde.",
             "summer_height": "Sommerstress taler for en højere klippehøjde.",
             "low_rain_height": "For lidt historisk og forecast-regn flytter målet til maksimumhøjden.",
+            "configured_max_cap": "Det indtastede maksimum bruges som øvre grænse.",
             "configured_height": "Det konfigurerede højdeinterval passer til de aktuelle forhold.",
         }
 
@@ -218,5 +232,6 @@ def _texts(language: str) -> dict[str, str]:
         "high_shade_height": "High shade increases the recommended cutting height.",
         "summer_height": "Summer stress favors a higher mowing height.",
         "low_rain_height": "Insufficient historical and forecast rain moves the target to maximum height.",
+        "configured_max_cap": "The configured maximum is used as the upper limit.",
         "configured_height": "Configured lawn height range is suitable for current conditions.",
     }
