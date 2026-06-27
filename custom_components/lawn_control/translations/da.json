@@ -135,11 +135,14 @@
           "max_height": {
             "name": "Maksimum højde"
           },
+          "historical_rain": {
+            "name": "Historisk regn"
+          },
+          "forecast_rain": {
+            "name": "Forecast-regn"
+          },
           "reason": {
             "name": "Årsag"
-          },
-          "robotic_mower": {
-            "name": "Robotplæneklipper"
           }
         }
       },
@@ -155,14 +158,11 @@
           "score": {
             "name": "Score"
           },
-          "details": {
-            "name": "Detaljer"
-          },
-          "recent_rain_used": {
-            "name": "Brugt seneste regn"
-          },
           "historical_rain": {
             "name": "Historisk regn"
+          },
+          "forecast_rain": {
+            "name": "Forecast-regn"
           },
           "reason": {
             "name": "Årsag"
@@ -184,67 +184,34 @@
           "estimated_mm_next_7_days": {
             "name": "Estimeret næste 7 dage"
           },
-          "watering_growth_bonus_mm_per_day": {
-            "name": "Vækstbonus fra vanding"
-          },
           "fertilizer_growth_bonus_mm_per_day": {
             "name": "Vækstbonus fra gødning"
           },
-          "fertilizer_residual_score": {
-            "name": "Resterende gødningsscore"
-          },
-          "fertilizer_strength": {
-            "name": "Gødningsstyrke"
-          },
-          "fertilizer_age_factor": {
-            "name": "Gødningsalder faktor"
-          },
-          "fertilizer_moisture_factor": {
-            "name": "Fugtfaktor for gødning"
-          },
-          "watering_effect": {
-            "name": "Vandingseffekt"
-          },
-          "npk_effect": {
-            "name": "NPK-effekt"
+          "days_since_fertilizer": {
+            "name": "Dage siden gødning"
           },
           "reason": {
             "name": "Årsag"
-          },
-          "water_during_drought": {
-            "name": "Vander i tørre perioder"
-          },
-          "watering_level": {
-            "name": "Vandingsniveau"
-          },
-          "n_percent": {
-            "name": "Kvælstof"
-          },
-          "p_percent": {
-            "name": "Fosfor"
-          },
-          "k_percent": {
-            "name": "Kalium"
-          },
-          "last_fertilized_date": {
-            "name": "Seneste gødningsdato"
-          },
-          "days_since_fertilizer": {
-            "name": "Dage siden gødning"
           }
         }
       },
       "fertilizer_score": {
         "name": "Gødningsscore",
         "state_attributes": {
-          "score": {
-            "name": "Score"
-          },
           "threshold": {
             "name": "Behovsgrænse"
           },
-          "details": {
-            "name": "Detaljer"
+          "days_since_fertilizer": {
+            "name": "Dage siden gødning"
+          },
+          "historical_rain": {
+            "name": "Historisk regn"
+          },
+          "forecast_rain": {
+            "name": "Forecast-regn"
+          },
+          "rain_status": {
+            "name": "Regnstatus"
           },
           "blocking_factors": {
             "name": "Blokerende faktorer"
@@ -273,9 +240,6 @@
           "score": {
             "name": "Score"
           },
-          "threshold": {
-            "name": "Behovsgrænse"
-          },
           "blocking_factors": {
             "name": "Blokerende faktorer"
           },
@@ -290,11 +254,8 @@
           "blocking_factors": {
             "name": "Blokerende faktorer"
           },
-          "recommended_min_height": {
-            "name": "Anbefalet minimum højde"
-          },
-          "recommended_max_height": {
-            "name": "Anbefalet maksimum højde"
+          "recommended_height": {
+            "name": "Anbefalet højde"
           },
           "reason": {
             "name": "Årsag"
@@ -305,20 +266,11 @@
           "lock_time": {
             "name": "Låsetidspunkt"
           },
-          "locked_at": {
-            "name": "Låst kl."
-          },
           "next_update": {
             "name": "Næste opdatering"
           },
           "live_value": {
             "name": "Aktuel værdi"
-          },
-          "live_blocking_factors": {
-            "name": "Aktuelle blokerende faktorer"
-          },
-          "live_reason": {
-            "name": "Aktuel årsag"
           }
         }
       },
@@ -334,15 +286,6 @@
           "estimated_mm_per_day": {
             "name": "Estimeret vækst pr. dag"
           },
-          "historical_temperature": {
-            "name": "Historisk temperatur"
-          },
-          "historical_humidity": {
-            "name": "Historisk luftfugtighed"
-          },
-          "historical_rain": {
-            "name": "Historisk regn"
-          },
           "reason": {
             "name": "Årsag"
           }
@@ -351,9 +294,6 @@
       "should_verticut": {
         "name": "Bør vertikalskære",
         "state_attributes": {
-          "calendar_months": {
-            "name": "Kalendermåneder"
-          },
           "blocking_factors": {
             "name": "Blokerende faktorer"
           },

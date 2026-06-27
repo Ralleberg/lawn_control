@@ -9,7 +9,6 @@ from ..const import (
     CONF_FERTILIZER_K_PERCENT,
     CONF_FERTILIZER_N_PERCENT,
     CONF_FERTILIZER_P_PERCENT,
-    CONF_LAST_FERTILIZED_DATE,
     CONF_ROBOTIC_MOWER,
     CONF_WATER_DURING_DROUGHT,
     CONF_WATERING_LEVEL,
@@ -80,28 +79,14 @@ def calculate_growth_rate(
     if not reasons:
         reasons.append(text["default_growth"])
 
-    watering_effect = _watering_effect_attributes(config)
-    npk_effect = _npk_effect_attributes(config)
+    fertilizer_days = _fertilizer_days_attributes(config)
     return {
         "value": rate,
         "attributes": {
             "estimated_mm_per_day": estimated,
             "estimated_mm_next_7_days": round(estimated * 7, 1),
-            "watering_growth_bonus_mm_per_day": watering_bonus,
             "fertilizer_growth_bonus_mm_per_day": fertilizer_bonus,
-            "water_during_drought": watering_effect["water_during_drought"],
-            "watering_level": watering_effect["watering_level"],
-            "n_percent": npk_effect["n_percent"],
-            "p_percent": npk_effect["p_percent"],
-            "k_percent": npk_effect["k_percent"],
-            "last_fertilized_date": npk_effect["last_fertilized_date"],
-            "days_since_fertilizer": npk_effect["days_since_fertilizer"],
-            "fertilizer_residual_score": fertilizer_effect["residual_score"],
-            "fertilizer_strength": fertilizer_effect["fertilizer_strength"],
-            "fertilizer_age_factor": fertilizer_effect["age_factor"],
-            "fertilizer_moisture_factor": fertilizer_effect["moisture_factor"],
-            "watering_effect": watering_effect,
-            "npk_effect": npk_effect,
+            "days_since_fertilizer": fertilizer_days["days_since_fertilizer"],
             "reason": " ".join(reasons),
         },
     }
@@ -144,8 +129,7 @@ def calculate_mowing_advice(
         "value": recommended,
         "attributes": {
             "blocking_factors": blocking_factors,
-            "recommended_min_height": height["attributes"]["min_height"],
-            "recommended_max_height": height["attributes"]["max_height"],
+            "recommended_height": height["value"],
             "reason": reason,
         },
     }
@@ -202,9 +186,6 @@ def calculate_robot_mower_advice(
             "blocking_factors": blocking_factors,
             "growth_rate": growth["value"],
             "estimated_mm_per_day": growth["attributes"]["estimated_mm_per_day"],
-            "historical_temperature": weather.historical_temperature,
-            "historical_humidity": weather.historical_humidity,
-            "historical_rain": weather.historical_rain,
             "reason": reason,
         },
     }
@@ -363,24 +344,12 @@ def _watering_growth_bonus(
     return 0.6
 
 
-def _npk_effect_attributes(config: dict[str, Any]) -> dict[str, Any]:
-    """Return transparent NPK inputs used by growth rules."""
+def _fertilizer_days_attributes(config: dict[str, Any]) -> dict[str, Any]:
+    """Return fertilizer age data used by growth rules."""
     return {
-        "n_percent": _float_config(config, CONF_FERTILIZER_N_PERCENT),
-        "p_percent": _float_config(config, CONF_FERTILIZER_P_PERCENT),
-        "k_percent": _float_config(config, CONF_FERTILIZER_K_PERCENT),
-        "last_fertilized_date": config.get(CONF_LAST_FERTILIZED_DATE),
         "days_since_fertilizer": _float_config(
             config, CONF_DAYS_SINCE_FERTILIZER, default=90
         ),
-    }
-
-
-def _watering_effect_attributes(config: dict[str, Any]) -> dict[str, Any]:
-    """Return transparent watering inputs used by growth rules."""
-    return {
-        "water_during_drought": bool(config.get(CONF_WATER_DURING_DROUGHT)),
-        "watering_level": config.get(CONF_WATERING_LEVEL, "normal"),
     }
 
 

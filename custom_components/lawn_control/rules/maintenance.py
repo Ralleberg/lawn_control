@@ -42,7 +42,6 @@ def calculate_verticut_advice(
     return {
         "value": recommended,
         "attributes": {
-            "calendar_months": list(VERTICUT_MONTHS),
             "blocking_factors": blocking_factors,
             "reason": reason,
         },

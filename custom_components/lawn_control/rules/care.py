@@ -8,13 +8,16 @@ from ..const import (
     CONF_LAWN_TYPE,
     CONF_MAX_GRASS_HEIGHT,
     CONF_MIN_GRASS_HEIGHT,
-    CONF_ROBOTIC_MOWER,
     CONF_SHADE_LEVEL,
     DEFAULT_MAX_GRASS_HEIGHT,
     DEFAULT_MIN_GRASS_HEIGHT,
 )
 from .drought import calculate_drought_risk
-from .fertilizer import calculate_fertilizer_score
+from .fertilizer import (
+    FORECAST_RAIN_OK_MM,
+    HISTORICAL_RAIN_OK_MM,
+    calculate_fertilizer_score,
+)
 from .maintenance import calculate_verticut_advice
 from .mowing import (
     calculate_growth_rate,
@@ -55,7 +58,6 @@ def build_advice(
             and not fertilizer["blocking_factors"],
             "attributes": {
                 "score": fertilizer["score"],
-                "threshold": fertilizer["threshold"],
                 "blocking_factors": fertilizer["blocking_factors"],
                 "reason": fertilizer["reason"],
             },
@@ -99,17 +101,25 @@ def recommended_grass_height(
         max_height += 5
         reasons.append(text["summer_height"])
 
+    historical_rain_ok = _rain_reaches(weather.historical_rain, HISTORICAL_RAIN_OK_MM)
+    forecast_rain = weather.forecast_rain_5_days
+    forecast_rain_ok = _rain_reaches(forecast_rain, FORECAST_RAIN_OK_MM)
+    not_enough_rain = not historical_rain_ok and not forecast_rain_ok
+    if not_enough_rain:
+        reasons.append(text["low_rain_height"])
+
     if not reasons:
         reasons.append(text["configured_height"])
 
-    target = round((min_height + max_height) / 2)
+    target = max_height if not_enough_rain else round((min_height + max_height) / 2)
     return {
         "value": target,
         "attributes": {
             "min_height": min_height,
             "max_height": max_height,
+            "historical_rain": weather.historical_rain,
+            "forecast_rain": forecast_rain,
             "reason": " ".join(reasons),
-            "robotic_mower": bool(config.get(CONF_ROBOTIC_MOWER)),
         },
     }
 
@@ -151,6 +161,11 @@ def general_recommendation(
     }
 
 
+def _rain_reaches(value: float | None, threshold: int) -> bool:
+    """Return whether a rain value reaches the configured threshold."""
+    return value is not None and value >= threshold
+
+
 def _texts(language: str) -> dict[str, str]:
     """Return localized rule text."""
     if language.lower().startswith("da"):
@@ -176,6 +191,7 @@ def _texts(language: str) -> dict[str, str]:
             "shade_height": "Skyggeplæner har brug for ekstra bladmasse for stærkere vækst.",
             "high_shade_height": "Meget skygge øger den anbefalede klippehøjde.",
             "summer_height": "Sommerstress taler for en højere klippehøjde.",
+            "low_rain_height": "For lidt historisk og forecast-regn flytter målet til maksimumhøjden.",
             "configured_height": "Det konfigurerede højdeinterval passer til de aktuelle forhold.",
         }
 
@@ -201,5 +217,6 @@ def _texts(language: str) -> dict[str, str]:
         "shade_height": "Shaded lawns need extra leaf area for stronger growth.",
         "high_shade_height": "High shade increases the recommended cutting height.",
         "summer_height": "Summer stress favors a higher mowing height.",
+        "low_rain_height": "Insufficient historical and forecast rain moves the target to maximum height.",
         "configured_height": "Configured lawn height range is suitable for current conditions.",
     }

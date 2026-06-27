@@ -135,11 +135,14 @@
           "max_height": {
             "name": "Maximum height"
           },
+          "historical_rain": {
+            "name": "Historical rain"
+          },
+          "forecast_rain": {
+            "name": "Forecast rain"
+          },
           "reason": {
             "name": "Reason"
-          },
-          "robotic_mower": {
-            "name": "Robotic mower"
           }
         }
       },
@@ -155,14 +158,11 @@
           "score": {
             "name": "Score"
           },
-          "details": {
-            "name": "Details"
-          },
-          "recent_rain_used": {
-            "name": "Recent rain used"
-          },
           "historical_rain": {
             "name": "Historical rain"
+          },
+          "forecast_rain": {
+            "name": "Forecast rain"
           },
           "reason": {
             "name": "Reason"
@@ -184,67 +184,34 @@
           "estimated_mm_next_7_days": {
             "name": "Estimated next 7 days"
           },
-          "watering_growth_bonus_mm_per_day": {
-            "name": "Watering growth bonus"
-          },
           "fertilizer_growth_bonus_mm_per_day": {
             "name": "Fertilizer growth bonus"
           },
-          "fertilizer_residual_score": {
-            "name": "Remaining fertilizer score"
-          },
-          "fertilizer_strength": {
-            "name": "Fertilizer strength"
-          },
-          "fertilizer_age_factor": {
-            "name": "Fertilizer age factor"
-          },
-          "fertilizer_moisture_factor": {
-            "name": "Fertilizer moisture factor"
-          },
-          "watering_effect": {
-            "name": "Watering effect"
-          },
-          "npk_effect": {
-            "name": "NPK effect"
+          "days_since_fertilizer": {
+            "name": "Days since fertilizer"
           },
           "reason": {
             "name": "Reason"
-          },
-          "water_during_drought": {
-            "name": "Water during dry periods"
-          },
-          "watering_level": {
-            "name": "Watering level"
-          },
-          "n_percent": {
-            "name": "Nitrogen"
-          },
-          "p_percent": {
-            "name": "Phosphorus"
-          },
-          "k_percent": {
-            "name": "Potassium"
-          },
-          "last_fertilized_date": {
-            "name": "Last fertilized date"
-          },
-          "days_since_fertilizer": {
-            "name": "Days since fertilizer"
           }
         }
       },
       "fertilizer_score": {
         "name": "Fertilizer score",
         "state_attributes": {
-          "score": {
-            "name": "Score"
-          },
           "threshold": {
             "name": "Need threshold"
           },
-          "details": {
-            "name": "Details"
+          "days_since_fertilizer": {
+            "name": "Days since fertilizer"
+          },
+          "historical_rain": {
+            "name": "Historical rain"
+          },
+          "forecast_rain": {
+            "name": "Forecast rain"
+          },
+          "rain_status": {
+            "name": "Rain status"
           },
           "blocking_factors": {
             "name": "Blocking factors"
@@ -273,9 +240,6 @@
           "score": {
             "name": "Score"
           },
-          "threshold": {
-            "name": "Need threshold"
-          },
           "blocking_factors": {
             "name": "Blocking factors"
           },
@@ -290,11 +254,8 @@
           "blocking_factors": {
             "name": "Blocking factors"
           },
-          "recommended_min_height": {
-            "name": "Recommended minimum height"
-          },
-          "recommended_max_height": {
-            "name": "Recommended maximum height"
+          "recommended_height": {
+            "name": "Recommended height"
           },
           "reason": {
             "name": "Reason"
@@ -305,20 +266,11 @@
           "lock_time": {
             "name": "Lock time"
           },
-          "locked_at": {
-            "name": "Locked at"
-          },
           "next_update": {
             "name": "Next update"
           },
           "live_value": {
             "name": "Live value"
-          },
-          "live_blocking_factors": {
-            "name": "Live blocking factors"
-          },
-          "live_reason": {
-            "name": "Live reason"
           }
         }
       },
@@ -334,15 +286,6 @@
           "estimated_mm_per_day": {
             "name": "Estimated growth per day"
           },
-          "historical_temperature": {
-            "name": "Historical temperature"
-          },
-          "historical_humidity": {
-            "name": "Historical humidity"
-          },
-          "historical_rain": {
-            "name": "Historical rain"
-          },
           "reason": {
             "name": "Reason"
           }
@@ -351,9 +294,6 @@
       "should_verticut": {
         "name": "Should scarify",
         "state_attributes": {
-          "calendar_months": {
-            "name": "Calendar months"
-          },
           "blocking_factors": {
             "name": "Blocking factors"
           },

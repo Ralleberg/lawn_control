@@ -34,7 +34,8 @@ LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 1
 WEATHER_HISTORY_HOURS = 24
-WEATHER_HISTORY_KEEP_HOURS = 48
+RAIN_HISTORY_HOURS = 120
+WEATHER_HISTORY_KEEP_HOURS = 120
 
 
 @dataclass(slots=True)
@@ -47,6 +48,7 @@ class LawnWeatherData:
     recent_rain: float | None
     soil_moisture: float | None
     forecast_rain: float | None
+    forecast_rain_5_days: float | None
     forecast_condition: str | None
     historical_temperature: float | None
     historical_humidity: float | None
@@ -168,11 +170,8 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 **locked.get("attributes", {}),
                 "locked": True,
                 "lock_time": lock.get("lock_time", lock["locked_at"]),
-                "locked_at": lock["locked_at"],
                 "next_update": _next_lock_start(now, lock_hour).isoformat(),
                 "live_value": live["value"],
-                "live_blocking_factors": live["attributes"]["blocking_factors"],
-                "live_reason": live["attributes"]["reason"],
             }
             advice["should_mow"] = locked
         else:
@@ -235,6 +234,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             recent_rain=recent_rain,
             soil_moisture=self._read_float_sensor(CONF_SOIL_MOISTURE_SENSOR),
             forecast_rain=_forecast_precipitation(forecast),
+            forecast_rain_5_days=_forecast_precipitation_5_days(forecast),
             forecast_condition=first_forecast.get("condition"),
             historical_temperature=None,
             historical_humidity=None,
@@ -296,24 +296,31 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self._stored_data["weather_history"] = history
 
-        cutoff_summary = now - timedelta(hours=WEATHER_HISTORY_HOURS)
-        recent_items = [
+        cutoff_weather_summary = now - timedelta(hours=WEATHER_HISTORY_HOURS)
+        recent_weather_items = [
             item
             for item in history
             if _parse_datetime(item.get("time")) is not None
-            and _parse_datetime(item["time"]) >= cutoff_summary
+            and _parse_datetime(item["time"]) >= cutoff_weather_summary
+        ]
+        cutoff_rain_summary = now - timedelta(hours=RAIN_HISTORY_HOURS)
+        recent_rain_items = [
+            item
+            for item in history
+            if _parse_datetime(item.get("time")) is not None
+            and _parse_datetime(item["time"]) >= cutoff_rain_summary
         ]
 
         return (
             replace(
                 weather_data,
                 historical_temperature=_average(
-                    item.get("temperature") for item in recent_items
+                    item.get("temperature") for item in recent_weather_items
                 ),
                 historical_humidity=_average(
-                    item.get("humidity") for item in recent_items
+                    item.get("humidity") for item in recent_weather_items
                 ),
-                historical_rain=_max_value(item.get("rain") for item in recent_items),
+                historical_rain=_rain_total_by_day(recent_rain_items),
             ),
             True,
         )
@@ -333,6 +340,21 @@ def _forecast_precipitation(forecast: list[dict[str, Any]]) -> float | None:
         return None
 
     forecast_window = 24 if len(forecast) > 8 else 3
+    return _sum_forecast_rain(forecast, forecast_window)
+
+
+def _forecast_precipitation_5_days(forecast: list[dict[str, Any]]) -> float | None:
+    """Estimate forecast precipitation for the next five days when available."""
+    if not forecast:
+        return None
+
+    return _sum_forecast_rain(forecast, _forecast_window_size(forecast))
+
+
+def _sum_forecast_rain(
+    forecast: list[dict[str, Any]], forecast_window: int
+) -> float | None:
+    """Sum forecast precipitation over the requested number of entries."""
     total = 0.0
     found = False
     for item in forecast[:forecast_window]:
@@ -342,7 +364,25 @@ def _forecast_precipitation(forecast: list[dict[str, Any]]) -> float | None:
             total += rain
             found = True
 
-    return total if found else None
+    return round(total, 1) if found else None
+
+
+def _forecast_window_size(forecast: list[dict[str, Any]]) -> int:
+    """Return entries covering roughly five forecast days."""
+    if len(forecast) <= 5:
+        return len(forecast)
+
+    first = _parse_datetime(forecast[0].get("datetime"))
+    second = _parse_datetime(forecast[1].get("datetime"))
+    if first is not None and second is not None:
+        interval = abs(second - first)
+        if interval <= timedelta(hours=2):
+            return min(len(forecast), 24 * 5)
+        return min(len(forecast), 5)
+
+    if len(forecast) > 8:
+        return min(len(forecast), 24 * 5)
+    return min(len(forecast), 5)
 
 
 def _parse_datetime(value: Any) -> datetime | None:
@@ -350,7 +390,7 @@ def _parse_datetime(value: Any) -> datetime | None:
     if not isinstance(value, str):
         return None
     try:
-        return datetime.fromisoformat(value)
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
 
@@ -364,13 +404,21 @@ def _average(values: Any) -> float | None:
     return round(sum(numbers) / len(numbers), 1)
 
 
-def _max_value(values: Any) -> float | None:
-    """Return the maximum numeric value."""
-    numbers = [_as_float(value) for value in values]
-    numbers = [value for value in numbers if value is not None]
-    if not numbers:
+def _rain_total_by_day(items: list[dict[str, Any]]) -> float | None:
+    """Sum daily rain maximums to avoid double-counting repeated sensor updates."""
+    daily_max: dict[str, float] = {}
+    for item in items:
+        item_time = _parse_datetime(item.get("time"))
+        rain = _as_float(item.get("rain"))
+        if item_time is None or rain is None:
+            continue
+
+        day = item_time.date().isoformat()
+        daily_max[day] = max(daily_max.get(day, 0.0), rain)
+
+    if not daily_max:
         return None
-    return round(max(numbers), 1)
+    return round(sum(daily_max.values()), 1)
 
 
 def _days_since_date(value: Any, now: datetime) -> int | None:
