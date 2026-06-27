@@ -115,8 +115,8 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Update all calculated advice."""
-        forecast = await self._async_get_forecast()
-        weather_data = self._read_weather_data(forecast)
+        forecasts = await self._async_get_forecasts()
+        weather_data = self._read_weather_data(forecasts)
         weather_data, history_saved = self._update_weather_history(weather_data)
         language = getattr(self.hass.config, "language", "en")
         advice = build_advice(self.config, weather_data, language)
@@ -183,9 +183,10 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return advice, should_save
 
-    async def _async_get_forecast(self) -> list[dict[str, Any]]:
+    async def _async_get_forecasts(self) -> dict[str, list[dict[str, Any]]]:
         """Fetch forecast data from the configured weather entity."""
         entity_id = self.config[CONF_WEATHER_ENTITY]
+        forecasts: dict[str, list[dict[str, Any]]] = {}
 
         for forecast_type in ("hourly", "daily"):
             try:
@@ -206,18 +207,24 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             forecast = response.get(entity_id, {}).get("forecast", [])
             if forecast:
-                return forecast
+                forecasts[forecast_type] = forecast
 
-        return []
+        return forecasts
 
-    def _read_weather_data(self, forecast: list[dict[str, Any]]) -> LawnWeatherData:
+    def _read_weather_data(
+        self, forecasts: dict[str, list[dict[str, Any]]]
+    ) -> LawnWeatherData:
         """Read weather and optional sensor states from Home Assistant."""
         config = self.config
         weather_state = self.hass.states.get(config[CONF_WEATHER_ENTITY])
         weather_attrs = weather_state.attributes if weather_state else {}
 
-        forecast = forecast or weather_attrs.get("forecast") or []
-        first_forecast = forecast[0] if forecast else {}
+        hourly_forecast = forecasts.get("hourly", [])
+        daily_forecast = forecasts.get("daily", [])
+        legacy_forecast = weather_attrs.get("forecast") or []
+        short_forecast = hourly_forecast or daily_forecast or legacy_forecast
+        five_day_forecast = daily_forecast or hourly_forecast or legacy_forecast
+        first_forecast = short_forecast[0] if short_forecast else {}
 
         temperature = self._read_float_sensor(CONF_TEMPERATURE_SENSOR)
         humidity = self._read_float_sensor(CONF_HUMIDITY_SENSOR)
@@ -233,8 +240,8 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else _as_float(weather_attrs.get("humidity")),
             recent_rain=recent_rain,
             soil_moisture=self._read_float_sensor(CONF_SOIL_MOISTURE_SENSOR),
-            forecast_rain=_forecast_precipitation(forecast),
-            forecast_rain_5_days=_forecast_precipitation_5_days(forecast),
+            forecast_rain=_forecast_precipitation(short_forecast),
+            forecast_rain_5_days=_forecast_precipitation_5_days(five_day_forecast),
             forecast_condition=first_forecast.get("condition"),
             historical_temperature=None,
             historical_humidity=None,
