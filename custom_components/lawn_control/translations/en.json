@@ -9,7 +9,7 @@
           "name": "Name",
           "weather_entity": "Weather entity",
           "temperature_sensor": "Temperature sensor",
-          "rain_sensor": "Rain sensor",
+          "rain_sensor": "Rain sensor (total rain today)",
           "humidity_sensor": "Humidity sensor",
           "soil_moisture_sensor": "Soil moisture sensor",
           "lawn_type": "Lawn type",
@@ -28,6 +28,7 @@
           "last_fertilized_date": "Last fertilized date"
         },
         "data_description": {
+          "rain_sensor": "Choose a sensor that shows total rain today so far, not current rain or rain per hour.",
           "daily_update_hour": "Choose the hour when today's mowing recommendation is locked. Use 0-23, for example 8 for 08:00.",
           "last_fertilized_date": "Enter the date you last applied fertilizer in YYYY-MM-DD format, for example 2026-05-20."
         }
@@ -51,7 +52,7 @@
           "name": "Name",
           "weather_entity": "Weather entity",
           "temperature_sensor": "Temperature sensor",
-          "rain_sensor": "Rain sensor",
+          "rain_sensor": "Rain sensor (total rain today)",
           "humidity_sensor": "Humidity sensor",
           "soil_moisture_sensor": "Soil moisture sensor",
           "lawn_type": "Lawn type",
@@ -70,6 +71,7 @@
           "last_fertilized_date": "Last fertilized date"
         },
         "data_description": {
+          "rain_sensor": "Choose a sensor that shows total rain today so far, not current rain or rain per hour.",
           "daily_update_hour": "Choose the hour when today's mowing recommendation is locked. Use 0-23, for example 8 for 08:00.",
           "last_fertilized_date": "Enter the date you last applied fertilizer in YYYY-MM-DD format, for example 2026-05-20."
         }

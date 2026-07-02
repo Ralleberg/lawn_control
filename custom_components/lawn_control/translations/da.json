@@ -9,7 +9,7 @@
           "name": "Navn",
           "weather_entity": "Vejr-entity",
           "temperature_sensor": "Temperatursensor",
-          "rain_sensor": "Regnsensor",
+          "rain_sensor": "Regnsensor (samlet nedbør i dag)",
           "humidity_sensor": "Luftfugtighedssensor",
           "soil_moisture_sensor": "Jordfugtighedssensor",
           "lawn_type": "Plænetype",
@@ -28,6 +28,7 @@
           "last_fertilized_date": "Seneste gødningsdato"
         },
         "data_description": {
+          "rain_sensor": "Vælg en sensor der viser samlet nedbør i dag indtil videre, ikke aktuel regn eller regn pr. time.",
           "daily_update_hour": "Vælg timen hvor dagens klippevurdering låses. Brug 0-23, for eksempel 8 for kl. 08:00.",
           "last_fertilized_date": "Indtast datoen hvor du sidst gødede i formatet YYYY-MM-DD, for eksempel 2026-05-20."
         }
@@ -51,7 +52,7 @@
           "name": "Navn",
           "weather_entity": "Vejr-entity",
           "temperature_sensor": "Temperatursensor",
-          "rain_sensor": "Regnsensor",
+          "rain_sensor": "Regnsensor (samlet nedbør i dag)",
           "humidity_sensor": "Luftfugtighedssensor",
           "soil_moisture_sensor": "Jordfugtighedssensor",
           "lawn_type": "Plænetype",
@@ -70,6 +71,7 @@
           "last_fertilized_date": "Seneste gødningsdato"
         },
         "data_description": {
+          "rain_sensor": "Vælg en sensor der viser samlet nedbør i dag indtil videre, ikke aktuel regn eller regn pr. time.",
           "daily_update_hour": "Vælg timen hvor dagens klippevurdering låses. Brug 0-23, for eksempel 8 for kl. 08:00.",
           "last_fertilized_date": "Indtast datoen hvor du sidst gødede i formatet YYYY-MM-DD, for eksempel 2026-05-20."
         }
