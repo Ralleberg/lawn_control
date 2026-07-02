@@ -143,6 +143,9 @@
           "forecast_rain": {
             "name": "Forecast-regn"
           },
+          "rain_total": {
+            "name": "Samlet regn"
+          },
           "reason": {
             "name": "Årsag"
           }
@@ -218,16 +221,19 @@
           "blocking_factors": {
             "name": "Blokerende faktorer"
           },
-          "historical_rain": {
-            "name": "Historisk regn"
-          },
-          "forecast_rain": {
-            "name": "Forecast-regn"
-          },
           "reason": {
             "name": "Årsag"
           }
         }
+      },
+      "historical_rain": {
+        "name": "Historisk regn"
+      },
+      "forecast_rain": {
+        "name": "Forecast-regn"
+      },
+      "combined_rain": {
+        "name": "Samlet regn"
       },
       "care_recommendation": {
         "name": "Plejeanbefaling",

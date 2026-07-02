@@ -143,6 +143,9 @@
           "forecast_rain": {
             "name": "Forecast rain"
           },
+          "rain_total": {
+            "name": "Combined rain"
+          },
           "reason": {
             "name": "Reason"
           }
@@ -218,16 +221,19 @@
           "blocking_factors": {
             "name": "Blocking factors"
           },
-          "historical_rain": {
-            "name": "Historical rain"
-          },
-          "forecast_rain": {
-            "name": "Forecast rain"
-          },
           "reason": {
             "name": "Reason"
           }
         }
+      },
+      "historical_rain": {
+        "name": "Historical rain"
+      },
+      "forecast_rain": {
+        "name": "Forecast rain"
+      },
+      "combined_rain": {
+        "name": "Combined rain"
       },
       "care_recommendation": {
         "name": "Care recommendation",

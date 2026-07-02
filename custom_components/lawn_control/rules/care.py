@@ -11,12 +11,11 @@ from ..const import (
     CONF_SHADE_LEVEL,
     DEFAULT_MAX_GRASS_HEIGHT,
     DEFAULT_MIN_GRASS_HEIGHT,
-    FORECAST_RAIN_OK_MM,
-    HISTORICAL_RAIN_OK_MM,
 )
 from .drought import calculate_drought_risk
 from .fertilizer import calculate_fertilizer_score
 from .maintenance import calculate_verticut_advice
+from .moisture import RAIN_MOISTURE_OK_MM, rain_moisture_total
 from .mowing import (
     calculate_growth_rate,
     calculate_mowing_advice,
@@ -105,12 +104,8 @@ def recommended_grass_height(
         max_height += 5
         reasons.append(text["summer_height"])
 
-    historical_rain_ok = _rain_reaches(weather.historical_rain, HISTORICAL_RAIN_OK_MM)
     forecast_rain = weather.forecast_rain_5_days
-    forecast_rain_ok = _rain_reaches(forecast_rain, FORECAST_RAIN_OK_MM)
-    not_enough_rain = not historical_rain_ok and not forecast_rain_ok
-    if not_enough_rain:
-        reasons.append(text["low_rain_height"])
+    rain_total = rain_moisture_total(weather)
 
     if max_height > configured_max_height:
         max_height = configured_max_height
@@ -122,7 +117,16 @@ def recommended_grass_height(
     if not reasons:
         reasons.append(text["configured_height"])
 
-    target = max_height if not_enough_rain else round((min_height + max_height) / 2)
+    if rain_total < 10:
+        target = max_height
+        reasons.append(text["very_low_rain_height"])
+    elif rain_total < RAIN_MOISTURE_OK_MM:
+        target = _round_to_nearest_5((min_height + max_height) / 2)
+        reasons.append(text["medium_rain_height"])
+    else:
+        target = min_height
+        reasons.append(text["good_rain_height"])
+
     return {
         "value": target,
         "attributes": {
@@ -130,6 +134,7 @@ def recommended_grass_height(
             "max_height": max_height,
             "historical_rain": weather.historical_rain,
             "forecast_rain": forecast_rain,
+            "rain_total": rain_total,
             "reason": " ".join(reasons),
         },
     }
@@ -172,9 +177,9 @@ def general_recommendation(
     }
 
 
-def _rain_reaches(value: float | None, threshold: int) -> bool:
-    """Return whether a rain value reaches the configured threshold."""
-    return value is not None and value >= threshold
+def _round_to_nearest_5(value: float) -> int:
+    """Round a height to the nearest 5 mm."""
+    return int(round(value / 5) * 5)
 
 
 def _texts(language: str) -> dict[str, str]:
@@ -202,7 +207,9 @@ def _texts(language: str) -> dict[str, str]:
             "shade_height": "Skyggeplæner har brug for ekstra bladmasse for stærkere vækst.",
             "high_shade_height": "Meget skygge øger den anbefalede klippehøjde.",
             "summer_height": "Sommerstress taler for en højere klippehøjde.",
-            "low_rain_height": "For lidt historisk og forecast-regn flytter målet til maksimumhøjden.",
+            "very_low_rain_height": "Under 10 mm samlet regn holder målet på maksimumhøjden.",
+            "medium_rain_height": "10-20 mm samlet regn flytter målet til medianhøjden.",
+            "good_rain_height": "Mindst 20 mm samlet regn gør minimumhøjden egnet.",
             "configured_max_cap": "Det indtastede maksimum bruges som øvre grænse.",
             "configured_height": "Det konfigurerede højdeinterval passer til de aktuelle forhold.",
         }
@@ -229,7 +236,9 @@ def _texts(language: str) -> dict[str, str]:
         "shade_height": "Shaded lawns need extra leaf area for stronger growth.",
         "high_shade_height": "High shade increases the recommended cutting height.",
         "summer_height": "Summer stress favors a higher mowing height.",
-        "low_rain_height": "Insufficient historical and forecast rain moves the target to maximum height.",
+        "very_low_rain_height": "Less than 10 mm combined rain keeps the target at maximum height.",
+        "medium_rain_height": "10-20 mm combined rain moves the target to median height.",
+        "good_rain_height": "At least 20 mm combined rain makes minimum height suitable.",
         "configured_max_cap": "The configured maximum is used as the upper limit.",
         "configured_height": "Configured lawn height range is suitable for current conditions.",
     }

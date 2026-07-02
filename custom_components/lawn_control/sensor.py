@@ -61,6 +61,39 @@ SENSORS: tuple[LawnSensorEntityDescription, ...] = (
         attrs_fn=lambda data: data["fertilizer_score"]["attributes"],
     ),
     LawnSensorEntityDescription(
+        key="historical_rain",
+        translation_key="historical_rain",
+        name="Lawn Historical Rain",
+        icon="mdi:weather-rainy",
+        native_unit_of_measurement=UnitOfLength.MILLIMETERS,
+        value_fn=lambda data: data["recommended_grass_height"]["attributes"].get(
+            "historical_rain"
+        ),
+        attrs_fn=lambda data: {},
+    ),
+    LawnSensorEntityDescription(
+        key="forecast_rain",
+        translation_key="forecast_rain",
+        name="Lawn Forecast Rain",
+        icon="mdi:weather-pouring",
+        native_unit_of_measurement=UnitOfLength.MILLIMETERS,
+        value_fn=lambda data: data["recommended_grass_height"]["attributes"].get(
+            "forecast_rain"
+        ),
+        attrs_fn=lambda data: {},
+    ),
+    LawnSensorEntityDescription(
+        key="combined_rain",
+        translation_key="combined_rain",
+        name="Lawn Combined Rain",
+        icon="mdi:water",
+        native_unit_of_measurement=UnitOfLength.MILLIMETERS,
+        value_fn=lambda data: data["recommended_grass_height"]["attributes"].get(
+            "rain_total"
+        ),
+        attrs_fn=lambda data: {},
+    ),
+    LawnSensorEntityDescription(
         key="care_recommendation",
         translation_key="care_recommendation",
         name="Lawn Care Recommendation",
