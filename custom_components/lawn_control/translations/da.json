@@ -169,6 +169,9 @@
           "forecast_rain": {
             "name": "Forecast-regn"
           },
+          "recent_hour_rain": {
+            "name": "Regn seneste time"
+          },
           "reason": {
             "name": "Årsag"
           }

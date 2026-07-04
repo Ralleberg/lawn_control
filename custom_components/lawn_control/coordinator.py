@@ -46,6 +46,7 @@ class LawnWeatherData:
     temperature: float | None
     humidity: float | None
     recent_rain: float | None
+    recent_hour_rain: float | None
     soil_moisture: float | None
     forecast_rain: float | None
     forecast_rain_5_days: float | None
@@ -239,6 +240,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if humidity is not None
             else _as_float(weather_attrs.get("humidity")),
             recent_rain=recent_rain,
+            recent_hour_rain=None,
             soil_moisture=self._read_float_sensor(CONF_SOIL_MOISTURE_SENSOR),
             forecast_rain=_forecast_precipitation(short_forecast),
             forecast_rain_5_days=_forecast_precipitation_5_days(five_day_forecast),
@@ -328,6 +330,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     item.get("humidity") for item in recent_weather_items
                 ),
                 historical_rain=_rain_total_by_day(recent_rain_items),
+                recent_hour_rain=_rain_total_since(history, now - timedelta(hours=1)),
             ),
             True,
         )
@@ -426,6 +429,31 @@ def _rain_total_by_day(items: list[dict[str, Any]]) -> float | None:
     if not daily_max:
         return None
     return round(sum(daily_max.values()), 1)
+
+
+def _rain_total_since(items: list[dict[str, Any]], since: datetime) -> float | None:
+    """Return rain added since a time from a daily cumulative rain sensor."""
+    timed_values = [
+        (item_time, rain)
+        for item in items
+        if (item_time := _parse_datetime(item.get("time"))) is not None
+        and (rain := _as_float(item.get("rain"))) is not None
+    ]
+    if not timed_values:
+        return None
+
+    current_time, current_rain = max(timed_values, key=lambda item: item[0])
+    previous_values = [
+        (item_time, rain)
+        for item_time, rain in timed_values
+        if item_time.date() == current_time.date() and item_time <= since
+    ]
+    if not previous_values:
+        previous_rain = 0.0
+    else:
+        _, previous_rain = max(previous_values, key=lambda item: item[0])
+
+    return round(max(0.0, current_rain - previous_rain), 1)
 
 
 def _days_since_date(value: Any, now: datetime) -> int | None:

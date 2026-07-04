@@ -18,6 +18,8 @@ from .moisture import lacks_moisture_support
 if TYPE_CHECKING:
     from ..coordinator import LawnWeatherData
 
+ROBOT_RECENT_RAIN_BLOCK_MM = 10
+
 
 def calculate_growth_rate(
     config: dict[str, Any],
@@ -157,9 +159,6 @@ def calculate_robot_mower_advice(
     if weather.weather_state in ("rainy", "pouring", "lightning-rainy", "hail"):
         blocking_factors.append(text["robot_weather"])
 
-    if weather.historical_rain is not None and weather.historical_rain >= 5:
-        blocking_factors.append(text["history_rain"])
-
     if weather.historical_humidity is not None and weather.historical_humidity >= 90:
         blocking_factors.append(text["history_humidity"])
 
@@ -169,7 +168,10 @@ def calculate_robot_mower_advice(
     if lacks_moisture_support(config, weather):
         blocking_factors.append(text["robot_low_water"])
 
-    if weather.recent_rain is not None and weather.recent_rain >= 5:
+    if (
+        weather.recent_hour_rain is not None
+        and weather.recent_hour_rain > ROBOT_RECENT_RAIN_BLOCK_MM
+    ):
         blocking_factors.append(text["robot_recent_rain"])
 
     if weather.forecast_rain is not None and weather.forecast_rain >= 8:
@@ -195,6 +197,7 @@ def calculate_robot_mower_advice(
             "estimated_mm_per_day": growth["attributes"]["estimated_mm_per_day"],
             "historical_rain": weather.historical_rain,
             "forecast_rain": weather.forecast_rain_5_days,
+            "recent_hour_rain": weather.recent_hour_rain,
             "reason": reason,
         },
     }
@@ -394,11 +397,10 @@ def _texts(language: str) -> dict[str, str]:
             "mow_not_needed": "Græsslåning er ikke nødvendig i dag.",
             "robot_disabled": "Robotplæneklipper er ikke aktiveret i integrationen.",
             "robot_weather": "Det aktuelle vejr er ikke egnet til robotklipning.",
-            "history_rain": "Regnhistorikken tyder på vådt græs.",
             "history_humidity": "Fugtighedshistorikken tyder på langsom tørring.",
             "history_cold": "Temperaturhistorikken er for kold til klipning.",
             "robot_low_water": "Den akkumulerede regn og forecast-regn er for lav til robotklipning.",
-            "robot_recent_rain": "Nylig regn kan efterlade græsset for vådt til robotklipning.",
+            "robot_recent_rain": "Over 10 mm regn den seneste time kan efterlade græsset for vådt til robotklipning.",
             "robot_forecast": "Forecast-regn gør robotklipning mindre egnet.",
             "robot_drought": "Undgå robotklipning under betydelig tørkestress.",
             "robot_stopped": "Væksten er stoppet, så robotklipning er unødvendig.",
@@ -430,11 +432,10 @@ def _texts(language: str) -> dict[str, str]:
         "mow_not_needed": "Mowing is not needed today.",
         "robot_disabled": "Robotic mower is not enabled in this integration.",
         "robot_weather": "Current weather is not suitable for robot mowing.",
-        "history_rain": "Recent rain history suggests wet grass.",
         "history_humidity": "Recent humidity history suggests slow drying.",
         "history_cold": "Recent temperature history is too cold for mowing.",
         "robot_low_water": "Accumulated rain and forecast rain are too low for robot mowing.",
-        "robot_recent_rain": "Recent rain can leave grass too wet for robot mowing.",
+        "robot_recent_rain": "More than 10 mm rain in the last hour can leave grass too wet for robot mowing.",
         "robot_forecast": "Forecast rain makes robot mowing less suitable.",
         "robot_drought": "Avoid robot mowing during significant drought stress.",
         "robot_stopped": "Growth is stopped, so robot mowing is unnecessary.",
