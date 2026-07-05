@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from ..const import CONF_SOIL_TYPE, CONF_WATER_DURING_DROUGHT, CONF_WATERING_LEVEL
+from .moisture import forecast_rain_threshold, historical_rain_threshold
 
 if TYPE_CHECKING:
     from ..coordinator import LawnWeatherData
@@ -19,30 +20,44 @@ def calculate_drought_risk(
 
     recent_rain = _best_recent_rain(weather.recent_rain, weather.historical_rain)
     forecast_rain = weather.forecast_rain_5_days
-    temperature = weather.temperature
-    humidity = weather.humidity
+    temperature = _highest_value(weather.temperature, weather.historical_temperature)
+    humidity = _lowest_value(weather.humidity, weather.historical_humidity)
+    sun_stress = _sun_stress(weather.weather_state, weather.forecast_condition)
+    historical_threshold = historical_rain_threshold(config)
+    forecast_threshold = forecast_rain_threshold(config)
 
     if recent_rain is None:
         score += 20
-    elif recent_rain < 2:
+    elif recent_rain < historical_threshold / 4:
         score += 35
-    elif recent_rain < 8:
+    elif recent_rain < historical_threshold:
         score += 20
 
     if forecast_rain is None:
         score += 10
-    elif forecast_rain < 2:
+    elif forecast_rain < forecast_threshold / 4:
         score += 20
-    elif forecast_rain >= 8:
+    elif forecast_rain >= forecast_threshold:
         score -= 15
 
-    if temperature is not None and temperature >= 26:
-        score += 20
-    elif temperature is not None and temperature >= 22:
-        score += 10
-
-    if humidity is not None and humidity < 45:
+    if temperature is not None and temperature >= 28:
+        score += 25
+    elif temperature is not None and temperature >= 24:
         score += 15
+    elif temperature is not None and temperature >= 20:
+        score += 5
+
+    if humidity is not None and humidity < 35:
+        score += 20
+    elif humidity is not None and humidity < 45:
+        score += 12
+    elif humidity is not None and humidity >= 75:
+        score -= 5
+
+    if sun_stress:
+        score += sun_stress
+        if temperature is not None and temperature >= 24:
+            score += 5
 
     if weather.soil_moisture is not None:
         if weather.soil_moisture < 25:
@@ -91,6 +106,28 @@ def _best_recent_rain(
     if not values:
         return None
     return max(values)
+
+
+def _highest_value(*values: float | None) -> float | None:
+    """Return the highest known value."""
+    known = [value for value in values if value is not None]
+    return max(known) if known else None
+
+
+def _lowest_value(*values: float | None) -> float | None:
+    """Return the lowest known value."""
+    known = [value for value in values if value is not None]
+    return min(known) if known else None
+
+
+def _sun_stress(weather_state: str | None, forecast_condition: str | None) -> int:
+    """Return drying stress from sunny current or forecast weather."""
+    conditions = {weather_state, forecast_condition}
+    if "sunny" in conditions:
+        return 15
+    if "partlycloudy" in conditions:
+        return 8
+    return 0
 
 
 def _watering_reduction(config: dict[str, Any]) -> int:

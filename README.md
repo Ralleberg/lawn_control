@@ -4,7 +4,7 @@
 
 Lawn Control is a Home Assistant custom integration that gives lawn care advice from a weather entity, forecast data and optional real sensors for rain, temperature, humidity and soil moisture.
 
-Version `1.1.4` is advisory only. It exposes a robot mower permission entity,
+Version `1.2.0` is advisory only. It exposes a robot mower permission entity,
 but it does not send commands to mower hardware.
 
 ## Entities
@@ -40,15 +40,15 @@ Add the integration from Home Assistant's integrations UI. The config flow asks 
 
 ## Rule Approach
 
-The rule engine is intentionally simple in `1.1.4`. It uses transparent scoring and blocking checks for:
+The rule engine is intentionally simple in `1.2.0`. It uses transparent scoring and blocking checks for:
 
-- Grass height steps from combined 5-day rain support: maximum height below 10 mm, rounded median from 10-20 mm and minimum height from 20 mm.
-- Drought risk from observed rain, 5-day rain history, 5-day forecast rain, temperature, humidity, soil moisture, soil type and season.
+- Grass height steps from configurable combined rain support: maximum height when rain is far below the moisture threshold, median height below the threshold and minimum height when the threshold is met.
+- Drought risk from observed rain, configurable rain history, configurable forecast rain, sunny conditions, temperature, humidity, soil moisture, soil type and season.
 - Watering during dry periods reduces drought stress and can support growth after dry weather.
-- Growth rate from season, temperature and drought stress.
+- Growth rate from season, temperature, sunny/dry weather and drought stress.
 - Extra expected growth from recent NPK fertilizer, driven by nitrogen, NPK completeness, fertilizer age and moisture from rain, forecast rain, soil moisture or configured watering.
 - Fertilizer score from latest fertilizer date and NPK strength, calculated automatically on every update and changing only as fertilizer age changes.
-- Fertilizer blocking checks from season, growth, drought stress, heat and shared moisture support from soil moisture, configured watering or at least 20 mm combined historical and forecast rain.
+- Fertilizer blocking checks from season, growth, drought stress, heat and shared moisture support from soil moisture, configured watering or configurable historical and forecast rain thresholds.
 - Mowing suitability from wet conditions, drought risk, growth rate and forecast rain.
 - Daily mowing plan from mowing suitability, recent weather history, wet grass, rain forecast, drought stress and growth.
 - Robot mower run permission from current mowing suitability, mower-specific blockers and the same moisture support check.

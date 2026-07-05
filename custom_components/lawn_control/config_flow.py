@@ -19,6 +19,10 @@ from .const import (
     CONF_FERTILIZER_K_PERCENT,
     CONF_FERTILIZER_N_PERCENT,
     CONF_FERTILIZER_P_PERCENT,
+    CONF_FORECAST_RAIN_DAYS,
+    CONF_FORECAST_RAIN_THRESHOLD,
+    CONF_HISTORICAL_RAIN_DAYS,
+    CONF_HISTORICAL_RAIN_THRESHOLD,
     CONF_HUMIDITY_SENSOR,
     CONF_LAWN_TYPE,
     CONF_LAST_FERTILIZED_DATE,
@@ -34,6 +38,10 @@ from .const import (
     CONF_WATERING_LEVEL,
     CONF_WEATHER_ENTITY,
     DEFAULT_DAILY_UPDATE_HOUR,
+    DEFAULT_FORECAST_RAIN_DAYS,
+    DEFAULT_FORECAST_RAIN_THRESHOLD,
+    DEFAULT_HISTORICAL_RAIN_DAYS,
+    DEFAULT_HISTORICAL_RAIN_THRESHOLD,
     DEFAULT_MAX_GRASS_HEIGHT,
     DEFAULT_MIN_GRASS_HEIGHT,
     DOMAIN,
@@ -98,6 +106,66 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                     step=1,
                     mode=selector.NumberSelectorMode.SLIDER,
                     unit_of_measurement="h",
+                )
+            ),
+            vol.Required(
+                CONF_HISTORICAL_RAIN_THRESHOLD,
+                default=defaults.get(
+                    CONF_HISTORICAL_RAIN_THRESHOLD,
+                    DEFAULT_HISTORICAL_RAIN_THRESHOLD,
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=5,
+                    max=15,
+                    step=1,
+                    mode=selector.NumberSelectorMode.SLIDER,
+                    unit_of_measurement="mm",
+                )
+            ),
+            vol.Required(
+                CONF_FORECAST_RAIN_THRESHOLD,
+                default=defaults.get(
+                    CONF_FORECAST_RAIN_THRESHOLD,
+                    DEFAULT_FORECAST_RAIN_THRESHOLD,
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=10,
+                    max=25,
+                    step=1,
+                    mode=selector.NumberSelectorMode.SLIDER,
+                    unit_of_measurement="mm",
+                )
+            ),
+            vol.Required(
+                CONF_HISTORICAL_RAIN_DAYS,
+                default=defaults.get(
+                    CONF_HISTORICAL_RAIN_DAYS,
+                    DEFAULT_HISTORICAL_RAIN_DAYS,
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=3,
+                    max=10,
+                    step=1,
+                    mode=selector.NumberSelectorMode.SLIDER,
+                    unit_of_measurement="d",
+                )
+            ),
+            vol.Required(
+                CONF_FORECAST_RAIN_DAYS,
+                default=defaults.get(
+                    CONF_FORECAST_RAIN_DAYS,
+                    DEFAULT_FORECAST_RAIN_DAYS,
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=2,
+                    max=7,
+                    step=1,
+                    mode=selector.NumberSelectorMode.SLIDER,
+                    unit_of_measurement="d",
                 )
             ),
             vol.Required(
@@ -214,6 +282,12 @@ def _clean_user_input(user_input: dict[str, Any]) -> dict[str, Any]:
     }
     cleaned.setdefault(CONF_ROBOTIC_MOWER, False)
     cleaned.setdefault(CONF_DAILY_UPDATE_HOUR, DEFAULT_DAILY_UPDATE_HOUR)
+    cleaned.setdefault(
+        CONF_HISTORICAL_RAIN_THRESHOLD, DEFAULT_HISTORICAL_RAIN_THRESHOLD
+    )
+    cleaned.setdefault(CONF_FORECAST_RAIN_THRESHOLD, DEFAULT_FORECAST_RAIN_THRESHOLD)
+    cleaned.setdefault(CONF_HISTORICAL_RAIN_DAYS, DEFAULT_HISTORICAL_RAIN_DAYS)
+    cleaned.setdefault(CONF_FORECAST_RAIN_DAYS, DEFAULT_FORECAST_RAIN_DAYS)
     cleaned.setdefault(CONF_WATER_DURING_DROUGHT, False)
     cleaned.setdefault(CONF_WATERING_LEVEL, "normal")
     cleaned.setdefault(CONF_FERTILIZER_N_PERCENT, 0)
@@ -238,6 +312,28 @@ def _is_valid_hour(value: Any) -> bool:
     return float(value).is_integer() and 0 <= int(value) <= 23
 
 
+def _is_whole_number_in_range(value: Any, minimum: int, maximum: int) -> bool:
+    """Return true if value is a whole number within a range."""
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        return False
+    return float(value).is_integer() and minimum <= int(value) <= maximum
+
+
+def _rain_setting_errors(user_input: dict[str, Any]) -> dict[str, str]:
+    """Return validation errors for rain tuning options."""
+    checks = {
+        CONF_HISTORICAL_RAIN_THRESHOLD: (5, 15),
+        CONF_FORECAST_RAIN_THRESHOLD: (10, 25),
+        CONF_HISTORICAL_RAIN_DAYS: (3, 10),
+        CONF_FORECAST_RAIN_DAYS: (2, 7),
+    }
+    return {
+        key: "invalid_rain_setting"
+        for key, (minimum, maximum) in checks.items()
+        if not _is_whole_number_in_range(user_input.get(key), minimum, maximum)
+    }
+
+
 class LawnControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Lawn Control."""
 
@@ -251,6 +347,7 @@ class LawnControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             user_input = _clean_user_input(user_input)
+            errors.update(_rain_setting_errors(user_input))
             if user_input[CONF_MIN_GRASS_HEIGHT] >= user_input[CONF_MAX_GRASS_HEIGHT]:
                 errors["base"] = "height_range"
             elif not _is_valid_hour(user_input.get(CONF_DAILY_UPDATE_HOUR)):
@@ -259,7 +356,7 @@ class LawnControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 user_input[CONF_LAST_FERTILIZED_DATE]
             ):
                 errors[CONF_LAST_FERTILIZED_DATE] = "invalid_date"
-            else:
+            elif not errors:
                 return self.async_create_entry(
                     title=user_input[CONF_NAME],
                     data=user_input,
@@ -296,6 +393,7 @@ class LawnControlOptionsFlow(config_entries.OptionsFlow):
 
         if user_input is not None:
             user_input = _clean_user_input(user_input)
+            errors.update(_rain_setting_errors(user_input))
             if user_input[CONF_MIN_GRASS_HEIGHT] >= user_input[CONF_MAX_GRASS_HEIGHT]:
                 errors["base"] = "height_range"
             elif not _is_valid_hour(user_input.get(CONF_DAILY_UPDATE_HOUR)):
@@ -304,7 +402,7 @@ class LawnControlOptionsFlow(config_entries.OptionsFlow):
                 user_input[CONF_LAST_FERTILIZED_DATE]
             ):
                 errors[CONF_LAST_FERTILIZED_DATE] = "invalid_date"
-            else:
+            elif not errors:
                 return self.async_create_entry(title="", data=user_input)
 
         return self.async_show_form(

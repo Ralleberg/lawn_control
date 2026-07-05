@@ -4,13 +4,18 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ..const import CONF_WATER_DURING_DROUGHT
+from ..const import (
+    CONF_FORECAST_RAIN_THRESHOLD,
+    CONF_HISTORICAL_RAIN_THRESHOLD,
+    CONF_WATER_DURING_DROUGHT,
+    DEFAULT_FORECAST_RAIN_THRESHOLD,
+    DEFAULT_HISTORICAL_RAIN_THRESHOLD,
+)
 
 if TYPE_CHECKING:
     from ..coordinator import LawnWeatherData
 
 SOIL_MOISTURE_OK = 25
-RAIN_MOISTURE_OK_MM = 20
 
 
 def has_moisture_support(config: dict[str, Any], weather: LawnWeatherData) -> bool:
@@ -21,7 +26,13 @@ def has_moisture_support(config: dict[str, Any], weather: LawnWeatherData) -> bo
     if weather.soil_moisture is not None:
         return weather.soil_moisture >= SOIL_MOISTURE_OK
 
-    return rain_moisture_total(weather) >= RAIN_MOISTURE_OK_MM
+    historical_rain = _rain_value(weather.historical_rain)
+    forecast_rain = _rain_value(weather.forecast_rain_5_days)
+    return (
+        historical_rain >= historical_rain_threshold(config)
+        or forecast_rain >= forecast_rain_threshold(config)
+        or rain_moisture_total(weather) >= rain_moisture_threshold(config)
+    )
 
 
 def rain_moisture_total(weather: LawnWeatherData) -> float:
@@ -31,6 +42,29 @@ def rain_moisture_total(weather: LawnWeatherData) -> float:
         + _rain_value(weather.forecast_rain_5_days),
         1,
     )
+
+
+def historical_rain_threshold(config: dict[str, Any]) -> float:
+    """Return the configured historical rain threshold."""
+    return _float_config(
+        config,
+        CONF_HISTORICAL_RAIN_THRESHOLD,
+        DEFAULT_HISTORICAL_RAIN_THRESHOLD,
+    )
+
+
+def forecast_rain_threshold(config: dict[str, Any]) -> float:
+    """Return the configured forecast rain threshold."""
+    return _float_config(
+        config,
+        CONF_FORECAST_RAIN_THRESHOLD,
+        DEFAULT_FORECAST_RAIN_THRESHOLD,
+    )
+
+
+def rain_moisture_threshold(config: dict[str, Any]) -> float:
+    """Return the combined rain threshold for general moisture support."""
+    return max(historical_rain_threshold(config), forecast_rain_threshold(config))
 
 
 def lacks_moisture_support(config: dict[str, Any], weather: LawnWeatherData) -> bool:
@@ -59,6 +93,14 @@ def moisture_status(
 def _rain_value(value: float | None) -> float:
     """Return rain as a numeric value."""
     return value if value is not None else 0.0
+
+
+def _float_config(config: dict[str, Any], key: str, default: float) -> float:
+    """Read a numeric config value."""
+    try:
+        return float(config.get(key, default) or default)
+    except (TypeError, ValueError):
+        return default
 
 
 def _texts(language: str) -> dict[str, str]:

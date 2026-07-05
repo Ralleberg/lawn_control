@@ -9,8 +9,11 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.event import async_track_time_change
+from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.helpers.event import (
+    async_track_state_change_event,
+    async_track_time_change,
+)
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
@@ -18,6 +21,8 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_DAILY_UPDATE_HOUR,
     CONF_DAYS_SINCE_FERTILIZER,
+    CONF_FORECAST_RAIN_DAYS,
+    CONF_HISTORICAL_RAIN_DAYS,
     CONF_HUMIDITY_SENSOR,
     CONF_LAST_FERTILIZED_DATE,
     CONF_RAIN_SENSOR,
@@ -25,6 +30,8 @@ from .const import (
     CONF_TEMPERATURE_SENSOR,
     CONF_WEATHER_ENTITY,
     DEFAULT_DAILY_UPDATE_HOUR,
+    DEFAULT_FORECAST_RAIN_DAYS,
+    DEFAULT_HISTORICAL_RAIN_DAYS,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
 )
@@ -34,8 +41,8 @@ LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 1
 WEATHER_HISTORY_HOURS = 24
-RAIN_HISTORY_HOURS = 120
-WEATHER_HISTORY_KEEP_HOURS = 120
+MAX_WEATHER_HISTORY_KEEP_DAYS = 10
+SHOULD_MOW_LOCK_VERSION = 4
 
 
 @dataclass(slots=True)
@@ -85,6 +92,14 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 second=0,
             )
         ]
+        if rain_sensor := self.config.get(CONF_RAIN_SENSOR):
+            self._unsub_refresh_times.append(
+                async_track_state_change_event(
+                    self.hass,
+                    [rain_sensor],
+                    self._async_refresh_from_rain_change,
+                )
+            )
 
     async def async_shutdown(self) -> None:
         """Stop scheduled refreshes."""
@@ -95,6 +110,17 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_refresh_from_schedule(self, now: datetime) -> None:
         """Refresh when the daily lock starts."""
         await self.async_request_refresh()
+
+    @callback
+    def _async_refresh_from_rain_change(self, event: Event) -> None:
+        """Refresh immediately when the configured rain sensor changes."""
+        old_state = event.data.get("old_state")
+        new_state = event.data.get("new_state")
+        if new_state is None:
+            return
+        if old_state is not None and old_state.state == new_state.state:
+            return
+        self.hass.async_create_task(self.async_request_refresh())
 
     @property
     def config(self) -> dict[str, Any]:
@@ -149,12 +175,17 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Lock the mowing decision once per day from the configured hour."""
         lock = self._stored_data.get("should_mow")
         should_save = False
+        if lock and lock.get("version") != SHOULD_MOW_LOCK_VERSION:
+            lock = None
+            self._stored_data.pop("should_mow", None)
+            should_save = True
 
         if now.hour >= lock_hour and (
             not lock or lock.get("date") != date_key
             or lock.get("lock_hour") != lock_hour
         ):
             lock = {
+                "version": SHOULD_MOW_LOCK_VERSION,
                 "date": date_key,
                 "lock_hour": lock_hour,
                 "lock_time": _iso_at(now, lock_hour),
@@ -224,7 +255,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         daily_forecast = forecasts.get("daily", [])
         legacy_forecast = weather_attrs.get("forecast") or []
         short_forecast = hourly_forecast or daily_forecast or legacy_forecast
-        five_day_forecast = daily_forecast or hourly_forecast or legacy_forecast
+        rain_forecast = daily_forecast or hourly_forecast or legacy_forecast
         first_forecast = short_forecast[0] if short_forecast else {}
 
         temperature = self._read_float_sensor(CONF_TEMPERATURE_SENSOR)
@@ -243,7 +274,14 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             recent_hour_rain=None,
             soil_moisture=self._read_float_sensor(CONF_SOIL_MOISTURE_SENSOR),
             forecast_rain=_forecast_precipitation(short_forecast),
-            forecast_rain_5_days=_forecast_precipitation_5_days(five_day_forecast),
+            forecast_rain_5_days=_forecast_precipitation_days(
+                rain_forecast,
+                _int_config(
+                    config,
+                    CONF_FORECAST_RAIN_DAYS,
+                    DEFAULT_FORECAST_RAIN_DAYS,
+                ),
+            ),
             forecast_condition=first_forecast.get("condition"),
             historical_temperature=None,
             historical_humidity=None,
@@ -286,8 +324,13 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> tuple[LawnWeatherData, bool]:
         """Store recent inputs and add a simple 24-hour history summary."""
         now = dt_util.now()
+        history_days = _int_config(
+            self.config, CONF_HISTORICAL_RAIN_DAYS, DEFAULT_HISTORICAL_RAIN_DAYS
+        )
         history = self._stored_data.get("weather_history", [])
-        cutoff_keep = now - timedelta(hours=WEATHER_HISTORY_KEEP_HOURS)
+        cutoff_keep = now - timedelta(
+            days=max(MAX_WEATHER_HISTORY_KEEP_DAYS, history_days)
+        )
 
         history = [
             item
@@ -312,7 +355,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if _parse_datetime(item.get("time")) is not None
             and _parse_datetime(item["time"]) >= cutoff_weather_summary
         ]
-        cutoff_rain_summary = now - timedelta(hours=RAIN_HISTORY_HOURS)
+        cutoff_rain_summary = now - timedelta(days=history_days)
         recent_rain_items = [
             item
             for item in history
@@ -344,6 +387,14 @@ def _as_float(value: Any) -> float | None:
         return None
 
 
+def _int_config(config: dict[str, Any], key: str, default: int) -> int:
+    """Read a whole-number config value."""
+    try:
+        return int(float(config.get(key, default)))
+    except (TypeError, ValueError):
+        return default
+
+
 def _forecast_precipitation(forecast: list[dict[str, Any]]) -> float | None:
     """Estimate near-term forecast precipitation from weather attributes."""
     if not forecast:
@@ -353,12 +404,14 @@ def _forecast_precipitation(forecast: list[dict[str, Any]]) -> float | None:
     return _sum_forecast_rain(forecast, forecast_window)
 
 
-def _forecast_precipitation_5_days(forecast: list[dict[str, Any]]) -> float | None:
-    """Estimate forecast precipitation for the next five days when available."""
+def _forecast_precipitation_days(
+    forecast: list[dict[str, Any]], days: int
+) -> float | None:
+    """Estimate forecast precipitation for the configured horizon."""
     if not forecast:
         return None
 
-    return _sum_forecast_rain(forecast, _forecast_window_size(forecast))
+    return _sum_forecast_rain(forecast, _forecast_window_size(forecast, days))
 
 
 def _sum_forecast_rain(
@@ -377,9 +430,9 @@ def _sum_forecast_rain(
     return round(total, 1) if found else None
 
 
-def _forecast_window_size(forecast: list[dict[str, Any]]) -> int:
-    """Return entries covering roughly five forecast days."""
-    if len(forecast) <= 5:
+def _forecast_window_size(forecast: list[dict[str, Any]], days: int) -> int:
+    """Return entries covering roughly the configured forecast days."""
+    if len(forecast) <= days:
         return len(forecast)
 
     first = _parse_datetime(forecast[0].get("datetime"))
@@ -387,12 +440,12 @@ def _forecast_window_size(forecast: list[dict[str, Any]]) -> int:
     if first is not None and second is not None:
         interval = abs(second - first)
         if interval <= timedelta(hours=2):
-            return min(len(forecast), 24 * 5)
-        return min(len(forecast), 5)
+            return min(len(forecast), 24 * days)
+        return min(len(forecast), days)
 
     if len(forecast) > 8:
-        return min(len(forecast), 24 * 5)
-    return min(len(forecast), 5)
+        return min(len(forecast), 24 * days)
+    return min(len(forecast), days)
 
 
 def _parse_datetime(value: Any) -> datetime | None:
@@ -443,15 +496,20 @@ def _rain_total_since(items: list[dict[str, Any]], since: datetime) -> float | N
         return None
 
     current_time, current_rain = max(timed_values, key=lambda item: item[0])
-    previous_values = [
+    same_day_values = [
         (item_time, rain)
         for item_time, rain in timed_values
-        if item_time.date() == current_time.date() and item_time <= since
+        if item_time.date() == current_time.date() and item_time <= current_time
     ]
-    if not previous_values:
-        previous_rain = 0.0
-    else:
+    previous_values = [
+        (item_time, rain) for item_time, rain in same_day_values if item_time <= since
+    ]
+    if previous_values:
         _, previous_rain = max(previous_values, key=lambda item: item[0])
+    elif len(same_day_values) > 1:
+        _, previous_rain = min(same_day_values, key=lambda item: item[0])
+    else:
+        return 0.0
 
     return round(max(0.0, current_rain - previous_rain), 1)
 

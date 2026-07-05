@@ -18,7 +18,7 @@ from .moisture import lacks_moisture_support
 if TYPE_CHECKING:
     from ..coordinator import LawnWeatherData
 
-ROBOT_RECENT_RAIN_BLOCK_MM = 10
+RECENT_RAIN_BLOCK_MM = 5
 
 
 def calculate_growth_rate(
@@ -52,6 +52,14 @@ def calculate_growth_rate(
         elif weather.temperature >= 28:
             estimated -= 1.0
             reasons.append(text["hot_growth"])
+
+    weather_adjustment = _weather_growth_adjustment(config, weather, drought)
+    if weather_adjustment > 0:
+        estimated += weather_adjustment
+        reasons.append(text["sun_growth"].format(bonus=weather_adjustment))
+    elif weather_adjustment < 0:
+        estimated += weather_adjustment
+        reasons.append(text["dry_weather_growth"])
 
     drought_penalty = _drought_growth_penalty(config, drought)
     if drought_penalty:
@@ -110,7 +118,10 @@ def calculate_mowing_advice(
     if drought["value"] in ("high", "critical"):
         blocking_factors.append(text["mow_drought"])
 
-    if weather.recent_rain is not None and weather.recent_rain >= 8:
+    if (
+        weather.recent_hour_rain is not None
+        and weather.recent_hour_rain >= RECENT_RAIN_BLOCK_MM
+    ):
         blocking_factors.append(text["recent_rain_wet"])
 
     if weather.forecast_rain is not None and weather.forecast_rain >= 15:
@@ -136,6 +147,7 @@ def calculate_mowing_advice(
         "attributes": {
             "blocking_factors": blocking_factors,
             "recommended_height": height["value"],
+            "recent_hour_rain": weather.recent_hour_rain,
             "reason": reason,
         },
     }
@@ -170,7 +182,7 @@ def calculate_robot_mower_advice(
 
     if (
         weather.recent_hour_rain is not None
-        and weather.recent_hour_rain > ROBOT_RECENT_RAIN_BLOCK_MM
+        and weather.recent_hour_rain >= RECENT_RAIN_BLOCK_MM
     ):
         blocking_factors.append(text["robot_recent_rain"])
 
@@ -180,14 +192,14 @@ def calculate_robot_mower_advice(
     if drought["value"] in ("high", "critical"):
         blocking_factors.append(text["robot_drought"])
 
-    if growth["value"] == "stopped":
-        blocking_factors.append(text["robot_stopped"])
+    if growth["value"] in ("stopped", "slow"):
+        blocking_factors.append(text["robot_limited_growth"])
 
-    allowed = not blocking_factors and mowing["value"]
+    allowed = not blocking_factors
     if allowed:
         reason = text["robot_ok"]
     else:
-        reason = " ".join(blocking_factors) or mowing["attributes"]["reason"]
+        reason = " ".join(blocking_factors) or text["robot_not_needed"]
 
     return {
         "value": allowed,
@@ -356,6 +368,67 @@ def _watering_growth_bonus(
     return 0.6
 
 
+def _weather_growth_adjustment(
+    config: dict[str, Any],
+    weather: LawnWeatherData,
+    drought: dict[str, Any],
+) -> float:
+    """Return growth adjustment from sun, temperature and air humidity."""
+    if weather.month in (12, 1, 2):
+        return 0.0
+
+    temperature = _first_known(weather.temperature, weather.historical_temperature)
+    humidity = _first_known(weather.humidity, weather.historical_humidity)
+    sun_factor = _sun_factor(weather.weather_state, weather.forecast_condition)
+    moisture_missing = lacks_moisture_support(config, weather)
+
+    if temperature is not None and temperature < 6:
+        return 0.0
+
+    if (
+        sun_factor
+        and temperature is not None
+        and 10 <= temperature <= 24
+        and not moisture_missing
+        and drought["value"] in ("low", "medium")
+    ):
+        return 0.4 if sun_factor == "sunny" else 0.2
+
+    if (
+        temperature is not None
+        and temperature >= 26
+        and (moisture_missing or drought["value"] in ("high", "critical"))
+    ):
+        return -0.6 if sun_factor == "sunny" else -0.4
+
+    if humidity is not None and humidity < 40 and drought["value"] in (
+        "medium",
+        "high",
+        "critical",
+    ):
+        return -0.3
+
+    return 0.0
+
+
+def _sun_factor(weather_state: str | None, forecast_condition: str | None) -> str | None:
+    """Return current or forecast sunlight signal."""
+    conditions = {weather_state, forecast_condition}
+    if "sunny" in conditions:
+        return "sunny"
+    if "partlycloudy" in conditions:
+        return "partlycloudy"
+    return None
+
+
+def _first_known(*values: float | None) -> float | None:
+    """Return the first known numeric value."""
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
 def _fertilizer_days_attributes(config: dict[str, Any]) -> dict[str, Any]:
     """Return fertilizer age data used by growth rules."""
     return {
@@ -383,12 +456,14 @@ def _texts(language: str) -> dict[str, str]:
             "cold_growth": "Lav temperatur stopper væksten.",
             "good_temperature": "Temperaturen er gunstig for vækst.",
             "hot_growth": "Høj temperatur kan bremse væksten.",
+            "sun_growth": "Sol og passende temperatur tilføjer ca. {bonus} mm/dag, når fugten er tilstrækkelig.",
+            "dry_weather_growth": "Sol, varme eller tør luft begrænser væksten, når fugten er lav.",
             "drought_growth": "{risk} tørkerisiko begrænser væksten.",
             "watering_bonus": "Vanding i tørre perioder understøtter ca. {bonus} mm/dag.",
             "fertilizer_bonus": "Nylig NPK-gødning tilføjer ca. {bonus} mm/dag.",
             "default_growth": "Standardestimatet for vækst er baseret på den aktuelle sæson.",
             "mow_drought": "Undgå græsslåning under betydelig tørkestress.",
-            "recent_rain_wet": "Nylig regn kan efterlade græsset for vådt.",
+            "recent_rain_wet": "5 mm eller mere regn den seneste time kan efterlade græsset for vådt.",
             "forecast_rain": "Kraftig forecast-regn gør græsslåning mindre egnet.",
             "wet_weather": "Det aktuelle vejr er vådt.",
             "mow_low_water": "Den akkumulerede regn og forecast-regn er for lav til græsslåning.",
@@ -400,10 +475,11 @@ def _texts(language: str) -> dict[str, str]:
             "history_humidity": "Fugtighedshistorikken tyder på langsom tørring.",
             "history_cold": "Temperaturhistorikken er for kold til klipning.",
             "robot_low_water": "Den akkumulerede regn og forecast-regn er for lav til robotklipning.",
-            "robot_recent_rain": "Over 10 mm regn den seneste time kan efterlade græsset for vådt til robotklipning.",
+            "robot_recent_rain": "5 mm eller mere regn den seneste time kan efterlade græsset for vådt til robotklipning.",
             "robot_forecast": "Forecast-regn gør robotklipning mindre egnet.",
             "robot_drought": "Undgå robotklipning under betydelig tørkestress.",
-            "robot_stopped": "Væksten er stoppet, så robotklipning er unødvendig.",
+            "robot_limited_growth": "Væksten er for begrænset til robotklipning.",
+            "robot_not_needed": "Robotklipning er ikke nødvendig lige nu.",
             "robot_ok": "Robotklipning er tilladt, fordi klippeforholdene er egnede.",
             "low": "lav",
             "medium": "mellem",
@@ -418,12 +494,14 @@ def _texts(language: str) -> dict[str, str]:
         "cold_growth": "Low temperature stops growth.",
         "good_temperature": "Temperature is favorable for growth.",
         "hot_growth": "High temperature can slow growth.",
+        "sun_growth": "Sun and suitable temperature add about {bonus} mm/day when moisture is sufficient.",
+        "dry_weather_growth": "Sun, heat or dry air limits growth when moisture is low.",
         "drought_growth": "{risk} drought risk limits growth.",
         "watering_bonus": "Watering during dry periods supports about {bonus} mm/day.",
         "fertilizer_bonus": "Recent NPK fertilizer adds about {bonus} mm/day.",
         "default_growth": "Default growth estimate is based on current season.",
         "mow_drought": "Avoid mowing during significant drought stress.",
-        "recent_rain_wet": "Recent rain may leave the grass too wet.",
+        "recent_rain_wet": "5 mm or more rain in the last hour can leave the grass too wet.",
         "forecast_rain": "Heavy forecast rain makes mowing less suitable.",
         "wet_weather": "Current weather is wet.",
         "mow_low_water": "Accumulated rain and forecast rain are too low for mowing.",
@@ -435,10 +513,11 @@ def _texts(language: str) -> dict[str, str]:
         "history_humidity": "Recent humidity history suggests slow drying.",
         "history_cold": "Recent temperature history is too cold for mowing.",
         "robot_low_water": "Accumulated rain and forecast rain are too low for robot mowing.",
-        "robot_recent_rain": "More than 10 mm rain in the last hour can leave grass too wet for robot mowing.",
+        "robot_recent_rain": "5 mm or more rain in the last hour can leave grass too wet for robot mowing.",
         "robot_forecast": "Forecast rain makes robot mowing less suitable.",
         "robot_drought": "Avoid robot mowing during significant drought stress.",
-        "robot_stopped": "Growth is stopped, so robot mowing is unnecessary.",
+        "robot_limited_growth": "Growth is too limited for robot mowing.",
+        "robot_not_needed": "Robot mowing is not needed right now.",
         "robot_ok": "Robot mowing is allowed because mowing conditions are suitable.",
         "low": "low",
         "medium": "medium",

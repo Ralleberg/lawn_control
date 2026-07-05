@@ -15,6 +15,10 @@
           "lawn_type": "Plænetype",
           "robotic_mower": "Robotplæneklipper",
           "daily_update_hour": "Dagligt klippetidspunkt",
+          "historical_rain_threshold": "Historisk regngrænse",
+          "forecast_rain_threshold": "Forecast-regngrænse",
+          "historical_rain_days": "Historiske regndage",
+          "forecast_rain_days": "Forecast-dage",
           "shade_level": "Skyggeniveau",
           "soil_type": "Jordtype",
           "care_level": "Plejeniveau",
@@ -30,6 +34,10 @@
         "data_description": {
           "rain_sensor": "Vælg en sensor der viser samlet nedbør i dag indtil videre, ikke aktuel regn eller regn pr. time.",
           "daily_update_hour": "Vælg timen hvor dagens klippevurdering låses. Brug 0-23, for eksempel 8 for kl. 08:00.",
+          "historical_rain_threshold": "Mindste historiske regnmængde der alene kan tælle som nok fugt. Kan vælges fra 5 til 15 mm.",
+          "forecast_rain_threshold": "Mindste forventede regnmængde der alene kan tælle som nok kommende fugt. Kan vælges fra 10 til 25 mm.",
+          "historical_rain_days": "Antal dage bagud der bruges til historisk regn. Kan vælges fra 3 til 10 dage.",
+          "forecast_rain_days": "Antal dage frem der bruges til forecast-regn. Kan vælges fra 2 til 7 dage.",
           "last_fertilized_date": "Indtast datoen hvor du sidst gødede i formatet YYYY-MM-DD, for eksempel 2026-05-20."
         }
       }
@@ -37,7 +45,8 @@
     "error": {
       "height_range": "Minimum græshøjde skal være lavere end maksimum græshøjde.",
       "invalid_hour": "Tidspunktet skal være en hel time fra 0 til 23.",
-      "invalid_date": "Datoen skal skrives i formatet YYYY-MM-DD, for eksempel 2026-05-20."
+      "invalid_date": "Datoen skal skrives i formatet YYYY-MM-DD, for eksempel 2026-05-20.",
+      "invalid_rain_setting": "Regnindstillingen er uden for det tilladte interval."
     },
     "abort": {
       "already_configured": "Denne plæne er allerede konfigureret."
@@ -58,6 +67,10 @@
           "lawn_type": "Plænetype",
           "robotic_mower": "Robotplæneklipper",
           "daily_update_hour": "Dagligt klippetidspunkt",
+          "historical_rain_threshold": "Historisk regngrænse",
+          "forecast_rain_threshold": "Forecast-regngrænse",
+          "historical_rain_days": "Historiske regndage",
+          "forecast_rain_days": "Forecast-dage",
           "shade_level": "Skyggeniveau",
           "soil_type": "Jordtype",
           "care_level": "Plejeniveau",
@@ -73,6 +86,10 @@
         "data_description": {
           "rain_sensor": "Vælg en sensor der viser samlet nedbør i dag indtil videre, ikke aktuel regn eller regn pr. time.",
           "daily_update_hour": "Vælg timen hvor dagens klippevurdering låses. Brug 0-23, for eksempel 8 for kl. 08:00.",
+          "historical_rain_threshold": "Mindste historiske regnmængde der alene kan tælle som nok fugt. Kan vælges fra 5 til 15 mm.",
+          "forecast_rain_threshold": "Mindste forventede regnmængde der alene kan tælle som nok kommende fugt. Kan vælges fra 10 til 25 mm.",
+          "historical_rain_days": "Antal dage bagud der bruges til historisk regn. Kan vælges fra 3 til 10 dage.",
+          "forecast_rain_days": "Antal dage frem der bruges til forecast-regn. Kan vælges fra 2 til 7 dage.",
           "last_fertilized_date": "Indtast datoen hvor du sidst gødede i formatet YYYY-MM-DD, for eksempel 2026-05-20."
         }
       }
@@ -80,7 +97,8 @@
     "error": {
       "height_range": "Minimum græshøjde skal være lavere end maksimum græshøjde.",
       "invalid_hour": "Tidspunktet skal være en hel time fra 0 til 23.",
-      "invalid_date": "Datoen skal skrives i formatet YYYY-MM-DD, for eksempel 2026-05-20."
+      "invalid_date": "Datoen skal skrives i formatet YYYY-MM-DD, for eksempel 2026-05-20.",
+      "invalid_rain_setting": "Regnindstillingen er uden for det tilladte interval."
     }
   },
   "selector": {
@@ -273,6 +291,9 @@
           },
           "recommended_height": {
             "name": "Anbefalet højde"
+          },
+          "recent_hour_rain": {
+            "name": "Regn seneste time"
           },
           "reason": {
             "name": "Årsag"

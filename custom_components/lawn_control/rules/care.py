@@ -8,6 +8,7 @@ from ..const import (
     CONF_LAWN_TYPE,
     CONF_MAX_GRASS_HEIGHT,
     CONF_MIN_GRASS_HEIGHT,
+    CONF_ROBOTIC_MOWER,
     CONF_SHADE_LEVEL,
     DEFAULT_MAX_GRASS_HEIGHT,
     DEFAULT_MIN_GRASS_HEIGHT,
@@ -15,7 +16,7 @@ from ..const import (
 from .drought import calculate_drought_risk
 from .fertilizer import calculate_fertilizer_score
 from .maintenance import calculate_verticut_advice
-from .moisture import RAIN_MOISTURE_OK_MM, rain_moisture_total
+from .moisture import rain_moisture_threshold, rain_moisture_total
 from .mowing import (
     calculate_growth_rate,
     calculate_mowing_advice,
@@ -41,8 +42,14 @@ def build_advice(
         config, weather, drought, growth, mowing, language
     )
     verticut = calculate_verticut_advice(config, weather, drought, growth, language)
+    active_mowing = robot_mower if config.get(CONF_ROBOTIC_MOWER) else mowing
     recommendation = general_recommendation(
-        drought, fertilizer, mowing, growth, language
+        drought,
+        fertilizer,
+        active_mowing,
+        growth,
+        language,
+        bool(config.get(CONF_ROBOTIC_MOWER)),
     )
 
     return {
@@ -106,6 +113,7 @@ def recommended_grass_height(
 
     forecast_rain = weather.forecast_rain_5_days
     rain_total = rain_moisture_total(weather)
+    rain_threshold = rain_moisture_threshold(config)
 
     if max_height > configured_max_height:
         max_height = configured_max_height
@@ -117,10 +125,10 @@ def recommended_grass_height(
     if not reasons:
         reasons.append(text["configured_height"])
 
-    if rain_total < 10:
+    if rain_total < rain_threshold / 2:
         target = max_height
         reasons.append(text["very_low_rain_height"])
-    elif rain_total < RAIN_MOISTURE_OK_MM:
+    elif rain_total < rain_threshold:
         target = _round_to_nearest_5((min_height + max_height) / 2)
         reasons.append(text["medium_rain_height"])
     else:
@@ -146,6 +154,7 @@ def general_recommendation(
     mowing: dict[str, Any],
     growth: dict[str, Any],
     language: str,
+    robotic_mower: bool = False,
 ) -> dict[str, Any]:
     """Create a short human-readable recommendation."""
     actions: list[str] = []
@@ -156,8 +165,10 @@ def general_recommendation(
         actions.append(text["water"])
         reasons.append(text["drought"].format(risk=text[drought["value"]]))
     if mowing["value"]:
-        actions.append(text["mow"])
-        reasons.append(text["mow_reason"])
+        actions.append(text["robot_mow"] if robotic_mower else text["mow"])
+        reasons.append(
+            text["robot_mow_reason"] if robotic_mower else text["mow_reason"]
+        )
     if (
         fertilizer["score"] < fertilizer["threshold"]
         and not fertilizer["blocking_factors"]
@@ -190,6 +201,8 @@ def _texts(language: str) -> dict[str, str]:
             "drought": "Tørkerisikoen er {risk}.",
             "mow": "Det er egnet at slå græs i dag.",
             "mow_reason": "Forholdene er tørre nok, og væksten understøtter klipning.",
+            "robot_mow": "Robotplæneklipperen kan køre i dag.",
+            "robot_mow_reason": "Robotklipperens egne stopfaktorer er ikke aktive.",
             "fertilize": "Forholdene er gode til gødning.",
             "fertilizer_score": "Gødningsscoren er {score}.",
             "monitor": "Hold øje med forholdene.",
@@ -207,9 +220,9 @@ def _texts(language: str) -> dict[str, str]:
             "shade_height": "Skyggeplæner har brug for ekstra bladmasse for stærkere vækst.",
             "high_shade_height": "Meget skygge øger den anbefalede klippehøjde.",
             "summer_height": "Sommerstress taler for en højere klippehøjde.",
-            "very_low_rain_height": "Under 10 mm samlet regn holder målet på maksimumhøjden.",
-            "medium_rain_height": "10-20 mm samlet regn flytter målet til medianhøjden.",
-            "good_rain_height": "Mindst 20 mm samlet regn gør minimumhøjden egnet.",
+            "very_low_rain_height": "Samlet regn er langt under den valgte fugtgrænse, så målet holdes på maksimumhøjden.",
+            "medium_rain_height": "Samlet regn er under den valgte fugtgrænse, så målet flyttes til medianhøjden.",
+            "good_rain_height": "Samlet regn opfylder den valgte fugtgrænse, så minimumhøjden er egnet.",
             "configured_max_cap": "Det indtastede maksimum bruges som øvre grænse.",
             "configured_height": "Det konfigurerede højdeinterval passer til de aktuelle forhold.",
         }
@@ -219,6 +232,8 @@ def _texts(language: str) -> dict[str, str]:
         "drought": "Drought risk is {risk}.",
         "mow": "Mowing is suitable today.",
         "mow_reason": "Conditions are dry enough and growth supports regular mowing.",
+        "robot_mow": "The robot mower can run today.",
+        "robot_mow_reason": "Robot mower-specific blocking factors are clear.",
         "fertilize": "Fertilizer conditions are favorable.",
         "fertilizer_score": "Fertilizer score is {score}.",
         "monitor": "Keep monitoring conditions.",
@@ -236,9 +251,9 @@ def _texts(language: str) -> dict[str, str]:
         "shade_height": "Shaded lawns need extra leaf area for stronger growth.",
         "high_shade_height": "High shade increases the recommended cutting height.",
         "summer_height": "Summer stress favors a higher mowing height.",
-        "very_low_rain_height": "Less than 10 mm combined rain keeps the target at maximum height.",
-        "medium_rain_height": "10-20 mm combined rain moves the target to median height.",
-        "good_rain_height": "At least 20 mm combined rain makes minimum height suitable.",
+        "very_low_rain_height": "Combined rain is far below the configured moisture threshold, keeping the target at maximum height.",
+        "medium_rain_height": "Combined rain is below the configured moisture threshold, moving the target to median height.",
+        "good_rain_height": "Combined rain meets the configured moisture threshold, making minimum height suitable.",
         "configured_max_cap": "The configured maximum is used as the upper limit.",
         "configured_height": "Configured lawn height range is suitable for current conditions.",
     }
