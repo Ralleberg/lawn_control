@@ -29,6 +29,7 @@ from .const import (
     CONF_MAX_GRASS_HEIGHT,
     CONF_MIN_GRASS_HEIGHT,
     CONF_RAIN_SENSOR,
+    CONF_ROBOT_MOWER_ALLOW_NIGHT,
     CONF_ROBOTIC_MOWER,
     CONF_SHADE_LEVEL,
     CONF_SOIL_MOISTURE_SENSOR,
@@ -93,6 +94,10 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             vol.Required(
                 CONF_ROBOTIC_MOWER,
                 default=defaults.get(CONF_ROBOTIC_MOWER, False),
+            ): selector.BooleanSelector(),
+            vol.Required(
+                CONF_ROBOT_MOWER_ALLOW_NIGHT,
+                default=defaults.get(CONF_ROBOT_MOWER_ALLOW_NIGHT, True),
             ): selector.BooleanSelector(),
             vol.Required(
                 CONF_DAILY_UPDATE_HOUR,
@@ -281,6 +286,7 @@ def _clean_user_input(user_input: dict[str, Any]) -> dict[str, Any]:
         if value not in (None, "")
     }
     cleaned.setdefault(CONF_ROBOTIC_MOWER, False)
+    cleaned.setdefault(CONF_ROBOT_MOWER_ALLOW_NIGHT, True)
     cleaned.setdefault(CONF_DAILY_UPDATE_HOUR, DEFAULT_DAILY_UPDATE_HOUR)
     cleaned.setdefault(
         CONF_HISTORICAL_RAIN_THRESHOLD, DEFAULT_HISTORICAL_RAIN_THRESHOLD

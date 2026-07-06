@@ -14,6 +14,7 @@
           "soil_moisture_sensor": "Soil moisture sensor",
           "lawn_type": "Lawn type",
           "robotic_mower": "Robotic mower",
+          "robot_mower_allow_night": "Allow robot mowing at night",
           "daily_update_hour": "Daily mowing assessment hour",
           "historical_rain_threshold": "Historical rain threshold",
           "forecast_rain_threshold": "Forecast rain threshold",
@@ -33,6 +34,7 @@
         },
         "data_description": {
           "rain_sensor": "Choose a sensor that shows total rain today so far, not current rain or rain per hour.",
+          "robot_mower_allow_night": "When disabled, the robot mower will not be recommended between sunset and sunrise.",
           "daily_update_hour": "Choose the hour when today's mowing recommendation is locked. Use 0-23, for example 8 for 08:00.",
           "historical_rain_threshold": "Minimum historical rain that can count as enough moisture by itself. Choose 5 to 15 mm.",
           "forecast_rain_threshold": "Minimum forecast rain that can count as enough upcoming moisture by itself. Choose 10 to 25 mm.",
@@ -66,6 +68,7 @@
           "soil_moisture_sensor": "Soil moisture sensor",
           "lawn_type": "Lawn type",
           "robotic_mower": "Robotic mower",
+          "robot_mower_allow_night": "Allow robot mowing at night",
           "daily_update_hour": "Daily mowing assessment hour",
           "historical_rain_threshold": "Historical rain threshold",
           "forecast_rain_threshold": "Forecast rain threshold",
@@ -85,6 +88,7 @@
         },
         "data_description": {
           "rain_sensor": "Choose a sensor that shows total rain today so far, not current rain or rain per hour.",
+          "robot_mower_allow_night": "When disabled, the robot mower will not be recommended between sunset and sunrise.",
           "daily_update_hour": "Choose the hour when today's mowing recommendation is locked. Use 0-23, for example 8 for 08:00.",
           "historical_rain_threshold": "Minimum historical rain that can count as enough moisture by itself. Choose 5 to 15 mm.",
           "forecast_rain_threshold": "Minimum forecast rain that can count as enough upcoming moisture by itself. Choose 10 to 25 mm.",

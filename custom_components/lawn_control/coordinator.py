@@ -43,6 +43,7 @@ STORAGE_VERSION = 1
 WEATHER_HISTORY_HOURS = 24
 MAX_WEATHER_HISTORY_KEEP_DAYS = 10
 SHOULD_MOW_LOCK_VERSION = 4
+SUN_ENTITY_ID = "sun.sun"
 
 
 @dataclass(slots=True)
@@ -61,6 +62,7 @@ class LawnWeatherData:
     historical_temperature: float | None
     historical_humidity: float | None
     historical_rain: float | None
+    sun_is_up: bool | None
     month: int
 
 
@@ -100,6 +102,13 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._async_refresh_from_rain_change,
                 )
             )
+        self._unsub_refresh_times.append(
+            async_track_state_change_event(
+                self.hass,
+                [SUN_ENTITY_ID],
+                self._async_refresh_from_sun_change,
+            )
+        )
 
     async def async_shutdown(self) -> None:
         """Stop scheduled refreshes."""
@@ -114,6 +123,17 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @callback
     def _async_refresh_from_rain_change(self, event: Event) -> None:
         """Refresh immediately when the configured rain sensor changes."""
+        old_state = event.data.get("old_state")
+        new_state = event.data.get("new_state")
+        if new_state is None:
+            return
+        if old_state is not None and old_state.state == new_state.state:
+            return
+        self.hass.async_create_task(self.async_request_refresh())
+
+    @callback
+    def _async_refresh_from_sun_change(self, event: Event) -> None:
+        """Refresh immediately when the sun crosses the horizon."""
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
         if new_state is None:
@@ -250,6 +270,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         config = self.config
         weather_state = self.hass.states.get(config[CONF_WEATHER_ENTITY])
         weather_attrs = weather_state.attributes if weather_state else {}
+        sun_state = self.hass.states.get(SUN_ENTITY_ID)
 
         hourly_forecast = forecasts.get("hourly", [])
         daily_forecast = forecasts.get("daily", [])
@@ -286,6 +307,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             historical_temperature=None,
             historical_humidity=None,
             historical_rain=None,
+            sun_is_up=_sun_is_up(sun_state.state if sun_state else None),
             month=datetime.now().month,
         )
 
@@ -385,6 +407,15 @@ def _as_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _sun_is_up(state: str | None) -> bool | None:
+    """Return whether the Home Assistant sun entity is above the horizon."""
+    if state == "above_horizon":
+        return True
+    if state == "below_horizon":
+        return False
+    return None
 
 
 def _int_config(config: dict[str, Any], key: str, default: int) -> int:
