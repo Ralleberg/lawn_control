@@ -28,7 +28,7 @@ from .const import (
     CONF_LAST_FERTILIZED_DATE,
     CONF_MAX_GRASS_HEIGHT,
     CONF_MIN_GRASS_HEIGHT,
-    CONF_MOWING_UPDATE_CADENCE,
+    CONF_MOWING_UPDATE_FREQUENCY,
     CONF_RAIN_SENSOR,
     CONF_ROBOT_MOWER_ALLOW_NIGHT,
     CONF_ROBOTIC_MOWER,
@@ -46,10 +46,10 @@ from .const import (
     DEFAULT_HISTORICAL_RAIN_THRESHOLD,
     DEFAULT_MAX_GRASS_HEIGHT,
     DEFAULT_MIN_GRASS_HEIGHT,
-    DEFAULT_MOWING_UPDATE_CADENCE,
+    DEFAULT_MOWING_UPDATE_FREQUENCY,
     DOMAIN,
     LAWN_TYPES,
-    MOWING_UPDATE_CADENCES,
+    MOWING_UPDATE_FREQUENCIES,
     SHADE_LEVELS,
     SOIL_TYPES,
     WATERING_LEVELS,
@@ -103,15 +103,15 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 default=defaults.get(CONF_ROBOT_MOWER_ALLOW_NIGHT, True),
             ): selector.BooleanSelector(),
             vol.Required(
-                CONF_MOWING_UPDATE_CADENCE,
+                CONF_MOWING_UPDATE_FREQUENCY,
                 default=defaults.get(
-                    CONF_MOWING_UPDATE_CADENCE,
-                    DEFAULT_MOWING_UPDATE_CADENCE,
+                    CONF_MOWING_UPDATE_FREQUENCY,
+                    DEFAULT_MOWING_UPDATE_FREQUENCY,
                 ),
             ): selector.SelectSelector(
                 selector.SelectSelectorConfig(
-                    options=MOWING_UPDATE_CADENCES,
-                    translation_key=CONF_MOWING_UPDATE_CADENCE,
+                    options=MOWING_UPDATE_FREQUENCIES,
+                    translation_key=CONF_MOWING_UPDATE_FREQUENCY,
                 )
             ),
             vol.Required(
@@ -302,7 +302,7 @@ def _clean_user_input(user_input: dict[str, Any]) -> dict[str, Any]:
     }
     cleaned.setdefault(CONF_ROBOTIC_MOWER, False)
     cleaned.setdefault(CONF_ROBOT_MOWER_ALLOW_NIGHT, True)
-    cleaned.setdefault(CONF_MOWING_UPDATE_CADENCE, DEFAULT_MOWING_UPDATE_CADENCE)
+    cleaned.setdefault(CONF_MOWING_UPDATE_FREQUENCY, DEFAULT_MOWING_UPDATE_FREQUENCY)
     cleaned.setdefault(CONF_DAILY_UPDATE_HOUR, DEFAULT_DAILY_UPDATE_HOUR)
     cleaned.setdefault(
         CONF_HISTORICAL_RAIN_THRESHOLD, DEFAULT_HISTORICAL_RAIN_THRESHOLD
@@ -339,9 +339,9 @@ def _is_valid_hour(value: Any) -> bool:
     return _is_whole_number_in_range(value, 0, 23)
 
 
-def _is_valid_mowing_update_cadence(value: Any) -> bool:
-    """Return true if value is a known mowing update cadence."""
-    return value in MOWING_UPDATE_CADENCES
+def _is_valid_mowing_update_frequency(value: Any) -> bool:
+    """Return true if value is a known mowing update frequency."""
+    return value in MOWING_UPDATE_FREQUENCIES
 
 
 def _rain_setting_errors(user_input: dict[str, Any]) -> dict[str, str]:
@@ -375,10 +375,10 @@ class LawnControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors.update(_rain_setting_errors(user_input))
             if user_input[CONF_MIN_GRASS_HEIGHT] >= user_input[CONF_MAX_GRASS_HEIGHT]:
                 errors["base"] = "height_range"
-            elif not _is_valid_mowing_update_cadence(
-                user_input.get(CONF_MOWING_UPDATE_CADENCE)
+            elif not _is_valid_mowing_update_frequency(
+                user_input.get(CONF_MOWING_UPDATE_FREQUENCY)
             ):
-                errors[CONF_MOWING_UPDATE_CADENCE] = "invalid_mowing_update_cadence"
+                errors[CONF_MOWING_UPDATE_FREQUENCY] = "invalid_mowing_update_frequency"
             elif not _is_valid_hour(user_input.get(CONF_DAILY_UPDATE_HOUR)):
                 errors[CONF_DAILY_UPDATE_HOUR] = "invalid_hour"
             elif user_input.get(CONF_LAST_FERTILIZED_DATE) and not _is_valid_date(
@@ -425,10 +425,10 @@ class LawnControlOptionsFlow(config_entries.OptionsFlow):
             errors.update(_rain_setting_errors(user_input))
             if user_input[CONF_MIN_GRASS_HEIGHT] >= user_input[CONF_MAX_GRASS_HEIGHT]:
                 errors["base"] = "height_range"
-            elif not _is_valid_mowing_update_cadence(
-                user_input.get(CONF_MOWING_UPDATE_CADENCE)
+            elif not _is_valid_mowing_update_frequency(
+                user_input.get(CONF_MOWING_UPDATE_FREQUENCY)
             ):
-                errors[CONF_MOWING_UPDATE_CADENCE] = "invalid_mowing_update_cadence"
+                errors[CONF_MOWING_UPDATE_FREQUENCY] = "invalid_mowing_update_frequency"
             elif not _is_valid_hour(user_input.get(CONF_DAILY_UPDATE_HOUR)):
                 errors[CONF_DAILY_UPDATE_HOUR] = "invalid_hour"
             elif user_input.get(CONF_LAST_FERTILIZED_DATE) and not _is_valid_date(

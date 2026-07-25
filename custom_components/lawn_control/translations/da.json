@@ -15,7 +15,7 @@
           "lawn_type": "Plænetype",
           "robotic_mower": "Robotplæneklipper",
           "robot_mower_allow_night": "Tillad klipning om natten",
-          "mowing_update_cadence": "Opdateringskadence for klippeanbefaling",
+          "mowing_update_frequency": "Opdateringsfrekvens for klippeanbefaling",
           "daily_update_hour": "Dagligt klippetidspunkt",
           "historical_rain_threshold": "Historisk regngrænse",
           "forecast_rain_threshold": "Forecast-regngrænse",
@@ -36,8 +36,8 @@
         "data_description": {
           "rain_sensor": "Vælg en sensor der viser samlet nedbør i dag indtil videre, ikke aktuel regn eller regn pr. time.",
           "robot_mower_allow_night": "Hvis slået fra, vil klipning ikke blive anbefalet mellem solnedgang og solopgang.",
-          "mowing_update_cadence": "Vælg hvor længe hver klippeanbefaling skal gælde.",
-          "daily_update_hour": "Tidligste time hvor klipning kan anbefales, når natklipning er slået fra. Bruges også som daglig opdateringstid ved daglig kadence. Vælg 0-23, for eksempel 8 for kl. 08:00.",
+          "mowing_update_frequency": "Vælg hvor længe hver klippeanbefaling skal gælde.",
+          "daily_update_hour": "Tidligste time hvor klipning kan anbefales, når natklipning er slået fra. Bruges også som daglig opdateringstid ved daglig frekvens. Vælg 0-23, for eksempel 8 for kl. 08:00.",
           "historical_rain_threshold": "Mindste historiske regnmængde der alene kan tælle som nok fugt. Kan vælges fra 5 til 15 mm.",
           "forecast_rain_threshold": "Mindste forventede regnmængde der alene kan tælle som nok kommende fugt. Kan vælges fra 10 til 25 mm.",
           "historical_rain_days": "Antal dage bagud der bruges til historisk regn. Kan vælges fra 3 til 10 dage.",
@@ -50,7 +50,7 @@
       "height_range": "Minimum græshøjde skal være lavere end maksimum græshøjde.",
       "invalid_hour": "Tidspunktet skal være en hel time fra 0 til 23.",
       "invalid_date": "Datoen skal skrives i formatet YYYY-MM-DD, for eksempel 2026-05-20.",
-      "invalid_mowing_update_cadence": "Vælg en gyldig opdateringskadence for klippeanbefalingen.",
+      "invalid_mowing_update_frequency": "Vælg en gyldig opdateringsfrekvens for klippeanbefalingen.",
       "invalid_rain_setting": "Regnindstillingen er uden for det tilladte interval."
     },
     "abort": {
@@ -72,7 +72,7 @@
           "lawn_type": "Plænetype",
           "robotic_mower": "Robotplæneklipper",
           "robot_mower_allow_night": "Tillad klipning om natten",
-          "mowing_update_cadence": "Opdateringskadence for klippeanbefaling",
+          "mowing_update_frequency": "Opdateringsfrekvens for klippeanbefaling",
           "daily_update_hour": "Dagligt klippetidspunkt",
           "historical_rain_threshold": "Historisk regngrænse",
           "forecast_rain_threshold": "Forecast-regngrænse",
@@ -93,8 +93,8 @@
         "data_description": {
           "rain_sensor": "Vælg en sensor der viser samlet nedbør i dag indtil videre, ikke aktuel regn eller regn pr. time.",
           "robot_mower_allow_night": "Hvis slået fra, vil klipning ikke blive anbefalet mellem solnedgang og solopgang.",
-          "mowing_update_cadence": "Vælg hvor længe hver klippeanbefaling skal gælde.",
-          "daily_update_hour": "Tidligste time hvor klipning kan anbefales, når natklipning er slået fra. Bruges også som daglig opdateringstid ved daglig kadence. Vælg 0-23, for eksempel 8 for kl. 08:00.",
+          "mowing_update_frequency": "Vælg hvor længe hver klippeanbefaling skal gælde.",
+          "daily_update_hour": "Tidligste time hvor klipning kan anbefales, når natklipning er slået fra. Bruges også som daglig opdateringstid ved daglig frekvens. Vælg 0-23, for eksempel 8 for kl. 08:00.",
           "historical_rain_threshold": "Mindste historiske regnmængde der alene kan tælle som nok fugt. Kan vælges fra 5 til 15 mm.",
           "forecast_rain_threshold": "Mindste forventede regnmængde der alene kan tælle som nok kommende fugt. Kan vælges fra 10 til 25 mm.",
           "historical_rain_days": "Antal dage bagud der bruges til historisk regn. Kan vælges fra 3 til 10 dage.",
@@ -107,7 +107,7 @@
       "height_range": "Minimum græshøjde skal være lavere end maksimum græshøjde.",
       "invalid_hour": "Tidspunktet skal være en hel time fra 0 til 23.",
       "invalid_date": "Datoen skal skrives i formatet YYYY-MM-DD, for eksempel 2026-05-20.",
-      "invalid_mowing_update_cadence": "Vælg en gyldig opdateringskadence for klippeanbefalingen.",
+      "invalid_mowing_update_frequency": "Vælg en gyldig opdateringsfrekvens for klippeanbefalingen.",
       "invalid_rain_setting": "Regnindstillingen er uden for det tilladte interval."
     }
   },
@@ -120,7 +120,7 @@
         "shade": "Skygge"
       }
     },
-    "mowing_update_cadence": {
+    "mowing_update_frequency": {
       "options": {
         "hourly": "Hver time",
         "4_hours": "Hver 4. time",
@@ -188,8 +188,8 @@
           "locked": {
             "name": "Låst"
           },
-          "mowing_update_cadence": {
-            "name": "Opdateringskadence"
+          "mowing_update_frequency": {
+            "name": "Opdateringsfrekvens"
           },
           "lock_time": {
             "name": "Låsetidspunkt"

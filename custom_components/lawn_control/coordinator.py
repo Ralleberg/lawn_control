@@ -26,7 +26,7 @@ from .const import (
     CONF_HISTORICAL_RAIN_DAYS,
     CONF_HUMIDITY_SENSOR,
     CONF_LAST_FERTILIZED_DATE,
-    CONF_MOWING_UPDATE_CADENCE,
+    CONF_MOWING_UPDATE_FREQUENCY,
     CONF_RAIN_SENSOR,
     CONF_ROBOTIC_MOWER,
     CONF_ROBOT_MOWER_ALLOW_NIGHT,
@@ -36,10 +36,10 @@ from .const import (
     DEFAULT_DAILY_UPDATE_HOUR,
     DEFAULT_FORECAST_RAIN_DAYS,
     DEFAULT_HISTORICAL_RAIN_DAYS,
-    DEFAULT_MOWING_UPDATE_CADENCE,
+    DEFAULT_MOWING_UPDATE_FREQUENCY,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
-    MOWING_UPDATE_CADENCES,
+    MOWING_UPDATE_FREQUENCIES,
 )
 from .rules.care import build_advice, general_recommendation
 
@@ -160,7 +160,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         language = getattr(self.hass.config, "language", "en")
         advice = build_advice(self.config, weather_data, language)
         advice["availability"] = _availability_data(weather_data)
-        advice, should_save = self._apply_mowing_cadence_lock(advice)
+        advice, should_save = self._apply_mowing_frequency_lock(advice)
         self._apply_mowing_time_window(advice, weather_data, language)
         self._refresh_care_recommendation(advice, language)
         should_save = should_save or history_saved
@@ -168,19 +168,19 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self._store.async_save(self._stored_data)
         return advice
 
-    def _apply_mowing_cadence_lock(
+    def _apply_mowing_frequency_lock(
         self,
         advice: dict[str, Any],
     ) -> tuple[dict[str, Any], bool]:
-        """Keep mowing advice stable for the configured update cadence."""
+        """Keep mowing advice stable for the configured update frequency."""
         availability = advice.get("availability", {})
         if not availability.get("source_entities_available", True):
             return advice, False
 
         now = dt_util.now()
-        cadence = _mowing_update_cadence(self.config.get(CONF_MOWING_UPDATE_CADENCE))
-        period_start = _mowing_period_start(now, cadence, self.daily_update_hour)
-        next_update = _next_mowing_period_start(period_start, cadence)
+        frequency = _mowing_update_frequency(self.config.get(CONF_MOWING_UPDATE_FREQUENCY))
+        period_start = _mowing_period_start(now, frequency, self.daily_update_hour)
+        next_update = _next_mowing_period_start(period_start, frequency)
         period_key = period_start.isoformat()
         lock = self._stored_data.get("should_mow")
         should_save = False
@@ -188,12 +188,12 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if (
             not isinstance(lock, dict)
             or lock.get("version") != MOWING_LOCK_VERSION
-            or lock.get("cadence") != cadence
+            or lock.get("frequency") != frequency
             or lock.get("period_start") != period_key
         ):
             lock = {
                 "version": MOWING_LOCK_VERSION,
-                "cadence": cadence,
+                "frequency": frequency,
                 "period_start": period_key,
                 "next_update": next_update.isoformat(),
                 "locked_at": now.isoformat(),
@@ -207,7 +207,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         locked["attributes"] = {
             **locked.get("attributes", {}),
             "locked": True,
-            "mowing_update_cadence": cadence,
+            "mowing_update_frequency": frequency,
             "lock_time": lock.get("period_start", lock["locked_at"]),
             "next_update": lock.get("next_update", next_update.isoformat()),
             "live_value": live["value"],
@@ -587,39 +587,39 @@ def _should_store_weather_history(weather_data: LawnWeatherData) -> bool:
     )
 
 
-def _mowing_update_cadence(value: Any) -> str:
-    """Return a valid mowing update cadence."""
-    if value in MOWING_UPDATE_CADENCES:
+def _mowing_update_frequency(value: Any) -> str:
+    """Return a valid mowing update frequency."""
+    if value in MOWING_UPDATE_FREQUENCIES:
         return str(value)
-    return DEFAULT_MOWING_UPDATE_CADENCE
+    return DEFAULT_MOWING_UPDATE_FREQUENCY
 
 
-def _mowing_period_start(now: datetime, cadence: str, daily_hour: int) -> datetime:
+def _mowing_period_start(now: datetime, frequency: str, daily_hour: int) -> datetime:
     """Return the start of the current mowing update period."""
     anchor = now.replace(hour=daily_hour, minute=0, second=0, microsecond=0)
-    if cadence == "daily":
+    if frequency == "daily":
         if now < anchor:
             return anchor - timedelta(days=1)
         return anchor
 
-    period_hours = _mowing_period_hours(cadence)
+    period_hours = _mowing_period_hours(frequency)
     seconds_since_anchor = (now - anchor).total_seconds()
     periods_since_anchor = math.floor(seconds_since_anchor / (period_hours * 3600))
     return anchor + timedelta(hours=periods_since_anchor * period_hours)
 
 
-def _next_mowing_period_start(period_start: datetime, cadence: str) -> datetime:
+def _next_mowing_period_start(period_start: datetime, frequency: str) -> datetime:
     """Return when the current mowing update period ends."""
-    if cadence == "daily":
+    if frequency == "daily":
         return period_start + timedelta(days=1)
-    return period_start + timedelta(hours=_mowing_period_hours(cadence))
+    return period_start + timedelta(hours=_mowing_period_hours(frequency))
 
 
-def _mowing_period_hours(cadence: str) -> int:
+def _mowing_period_hours(frequency: str) -> int:
     """Return the number of hours in a non-daily mowing update period."""
-    if cadence == "4_hours":
+    if frequency == "4_hours":
         return 4
-    if cadence == "6_hours":
+    if frequency == "6_hours":
         return 6
     return 1
 

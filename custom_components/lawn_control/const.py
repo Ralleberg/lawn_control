@@ -14,7 +14,7 @@ CONF_SOIL_MOISTURE_SENSOR = "soil_moisture_sensor"
 CONF_LAWN_TYPE = "lawn_type"
 CONF_ROBOTIC_MOWER = "robotic_mower"
 CONF_ROBOT_MOWER_ALLOW_NIGHT = "robot_mower_allow_night"
-CONF_MOWING_UPDATE_CADENCE = "mowing_update_cadence"
+CONF_MOWING_UPDATE_FREQUENCY = "mowing_update_frequency"
 CONF_SHADE_LEVEL = "shade_level"
 CONF_SOIL_TYPE = "soil_type"
 CONF_CARE_LEVEL = "care_level"
@@ -42,10 +42,10 @@ DEFAULT_HISTORICAL_RAIN_DAYS = 5
 DEFAULT_FORECAST_RAIN_DAYS = 5
 DEFAULT_UPDATE_INTERVAL = timedelta(hours=1)
 DEFAULT_DAILY_UPDATE_HOUR = 8
-DEFAULT_MOWING_UPDATE_CADENCE = "hourly"
+DEFAULT_MOWING_UPDATE_FREQUENCY = "hourly"
 
 LAWN_TYPES = ["regular", "ornamental", "wear_tolerant", "shade"]
-MOWING_UPDATE_CADENCES = ["hourly", "4_hours", "6_hours", "daily"]
+MOWING_UPDATE_FREQUENCIES = ["hourly", "4_hours", "6_hours", "daily"]
 SHADE_LEVELS = ["low", "medium", "high"]
 SOIL_TYPES = ["sandy", "normal", "clay"]
 CARE_LEVELS = ["low", "normal", "high"]
