@@ -28,7 +28,7 @@
 
 Instead of controlling hardware directly, Lawn Control continuously analyzes lawn conditions and exposes entities that can be used in Home Assistant dashboards, automations, and notifications.
 
-Version `1.2.3` is advisory only. It exposes a robot mower permission entity,
+Version `1.2.2` is advisory only. It exposes a robot mower permission entity,
 but it does not send commands to mower hardware.
 
 Every recommendation includes detailed attributes explaining exactly why the recommendation was made.
