@@ -111,6 +111,7 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             ): selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=MOWING_UPDATE_FREQUENCIES,
+                    mode=selector.SelectSelectorMode.DROPDOWN,
                     translation_key=CONF_MOWING_UPDATE_FREQUENCY,
                 )
             ),
@@ -126,6 +127,7 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                     step=1,
                     mode=selector.NumberSelectorMode.SLIDER,
                     unit_of_measurement="h",
+                    translation_key=CONF_DAILY_UPDATE_HOUR,
                 )
             ),
             vol.Required(
