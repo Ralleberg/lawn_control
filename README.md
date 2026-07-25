@@ -28,6 +28,9 @@
 
 Instead of controlling hardware directly, Lawn Control continuously analyzes lawn conditions and exposes entities that can be used in Home Assistant dashboards, automations, and notifications.
 
+Version `1.2.3` is advisory only. It exposes a robot mower permission entity,
+but it does not send commands to mower hardware.
+
 Every recommendation includes detailed attributes explaining exactly why the recommendation was made.
 
 ### Features
@@ -37,7 +40,7 @@ Every recommendation includes detailed attributes explaining exactly why the rec
 - 📈 Estimated grass growth
 - 🧪 Fertilizer effectiveness tracking
 - 🤖 Robot mower permission
-- ✂️ Daily mowing recommendation
+- ✂️ Hourly mowing recommendation
 - 🍂 Scarifying recommendation
 - 💧 Historical, forecast and combined rainfall analysis
 - ⚙️ Fully configurable rule engine
@@ -106,10 +109,6 @@ The setup wizard guides you through configuring the integration.
 - Whether a robotic mower is present
 - Whether mowing is allowed between sunset and sunrise
 
-## Daily planning
-
-- Daily assessment hour (0–23)
-
 ## Fertilizer
 
 Optional fertilizer configuration:
@@ -140,7 +139,7 @@ Example:
 | `sensor.lawn_combined_rain` | Combined rainfall used for moisture calculations. |
 | `sensor.lawn_care_recommendation` | Human-readable lawn care summary. |
 | `binary_sensor.lawn_good_day_for_fertilizer` | Indicates whether fertilizing is recommended. |
-| `binary_sensor.lawn_should_mow` | Daily mowing recommendation. |
+| `binary_sensor.lawn_should_mow` | Hourly mowing recommendation. Not created when robotic mower support is enabled. |
 | `binary_sensor.lawn_robot_mower_should_run` | Indicates whether a robot mower should be allowed to operate. |
 | `binary_sensor.lawn_should_verticut` | Indicates whether scarifying is recommended. |
 
@@ -167,6 +166,10 @@ The calculations consider:
 - Current growth conditions
 
 Every advisory entity exposes detailed attributes so the reasoning behind every recommendation can be inspected.
+
+Recommended grass height, mowing recommendations and the other advisory sensors update hourly, and source entity changes can trigger immediate refreshes.
+
+If the required weather entity is unavailable, all Lawn Control entities become unavailable. Configured optional sensors can be unavailable without stopping the rule engine; affected source entities are listed in each entity's attributes.
 
 ---
 
@@ -218,7 +221,7 @@ Mowing recommendations consider:
 - Current growth
 - Recent weather
 
-The daily mowing recommendation is locked once per day at the configured assessment hour to provide a stable recommendation throughout the day.
+The mowing recommendation is evaluated on each hourly coordinator update instead of being locked for a fixed daily period.
 
 ## Robot Mower
 

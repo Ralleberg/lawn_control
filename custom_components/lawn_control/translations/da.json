@@ -15,7 +15,6 @@
           "lawn_type": "Plænetype",
           "robotic_mower": "Robotplæneklipper",
           "robot_mower_allow_night": "Tillad robotklipning om natten",
-          "daily_update_hour": "Dagligt klippetidspunkt",
           "historical_rain_threshold": "Historisk regngrænse",
           "forecast_rain_threshold": "Forecast-regngrænse",
           "historical_rain_days": "Historiske regndage",
@@ -35,7 +34,6 @@
         "data_description": {
           "rain_sensor": "Vælg en sensor der viser samlet nedbør i dag indtil videre, ikke aktuel regn eller regn pr. time.",
           "robot_mower_allow_night": "Hvis slået fra, vil robotplæneklipperen ikke blive anbefalet mellem solnedgang og solopgang.",
-          "daily_update_hour": "Vælg timen hvor dagens klippevurdering låses. Brug 0-23, for eksempel 8 for kl. 08:00.",
           "historical_rain_threshold": "Mindste historiske regnmængde der alene kan tælle som nok fugt. Kan vælges fra 5 til 15 mm.",
           "forecast_rain_threshold": "Mindste forventede regnmængde der alene kan tælle som nok kommende fugt. Kan vælges fra 10 til 25 mm.",
           "historical_rain_days": "Antal dage bagud der bruges til historisk regn. Kan vælges fra 3 til 10 dage.",
@@ -69,7 +67,6 @@
           "lawn_type": "Plænetype",
           "robotic_mower": "Robotplæneklipper",
           "robot_mower_allow_night": "Tillad robotklipning om natten",
-          "daily_update_hour": "Dagligt klippetidspunkt",
           "historical_rain_threshold": "Historisk regngrænse",
           "forecast_rain_threshold": "Forecast-regngrænse",
           "historical_rain_days": "Historiske regndage",
@@ -89,7 +86,6 @@
         "data_description": {
           "rain_sensor": "Vælg en sensor der viser samlet nedbør i dag indtil videre, ikke aktuel regn eller regn pr. time.",
           "robot_mower_allow_night": "Hvis slået fra, vil robotplæneklipperen ikke blive anbefalet mellem solnedgang og solopgang.",
-          "daily_update_hour": "Vælg timen hvor dagens klippevurdering låses. Brug 0-23, for eksempel 8 for kl. 08:00.",
           "historical_rain_threshold": "Mindste historiske regnmængde der alene kan tælle som nok fugt. Kan vælges fra 5 til 15 mm.",
           "forecast_rain_threshold": "Mindste forventede regnmængde der alene kan tælle som nok kommende fugt. Kan vælges fra 10 til 25 mm.",
           "historical_rain_days": "Antal dage bagud der bruges til historisk regn. Kan vælges fra 3 til 10 dage.",
@@ -301,18 +297,6 @@
           },
           "reason": {
             "name": "Årsag"
-          },
-          "locked": {
-            "name": "Låst"
-          },
-          "lock_time": {
-            "name": "Låsetidspunkt"
-          },
-          "next_update": {
-            "name": "Næste opdatering"
-          },
-          "live_value": {
-            "name": "Aktuel værdi"
           }
         }
       },

@@ -16,6 +16,11 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import LawnControlCoordinator
+from .entity import (
+    merge_availability_attributes,
+    read_entity_value,
+    sources_available,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -142,9 +147,24 @@ class LawnControlSensor(CoordinatorEntity[LawnControlCoordinator], SensorEntity)
     @property
     def native_value(self) -> Any:
         """Return the sensor value."""
-        return self.entity_description.value_fn(self.coordinator.data)
+        return read_entity_value(
+            self.coordinator.data,
+            self.entity_description.value_fn,
+        )
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return transparent rule details."""
-        return self.entity_description.attrs_fn(self.coordinator.data)
+        return merge_availability_attributes(
+            self.coordinator.data,
+            self.entity_description.attrs_fn,
+        )
+
+    @property
+    def available(self) -> bool:
+        """Return whether this sensor has usable data."""
+        return (
+            super().available
+            and sources_available(self.coordinator.data)
+            and self.native_value is not None
+        )

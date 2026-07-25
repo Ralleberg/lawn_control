@@ -26,7 +26,6 @@ CONF_FERTILIZER_P_PERCENT = "fertilizer_p_percent"
 CONF_FERTILIZER_K_PERCENT = "fertilizer_k_percent"
 CONF_DAYS_SINCE_FERTILIZER = "days_since_fertilizer"
 CONF_LAST_FERTILIZED_DATE = "last_fertilized_date"
-CONF_DAILY_UPDATE_HOUR = "daily_update_hour"
 CONF_HISTORICAL_RAIN_THRESHOLD = "historical_rain_threshold"
 CONF_FORECAST_RAIN_THRESHOLD = "forecast_rain_threshold"
 CONF_HISTORICAL_RAIN_DAYS = "historical_rain_days"
@@ -40,7 +39,6 @@ DEFAULT_FORECAST_RAIN_THRESHOLD = 20
 DEFAULT_HISTORICAL_RAIN_DAYS = 5
 DEFAULT_FORECAST_RAIN_DAYS = 5
 DEFAULT_UPDATE_INTERVAL = timedelta(hours=1)
-DEFAULT_DAILY_UPDATE_HOUR = 8
 
 LAWN_TYPES = ["regular", "ornamental", "wear_tolerant", "shade"]
 SHADE_LEVELS = ["low", "medium", "high"]

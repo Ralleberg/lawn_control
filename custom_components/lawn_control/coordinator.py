@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from copy import deepcopy
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Any
@@ -12,24 +11,22 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import (
     async_track_state_change_event,
-    async_track_time_change,
 )
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_DAILY_UPDATE_HOUR,
     CONF_DAYS_SINCE_FERTILIZER,
     CONF_FORECAST_RAIN_DAYS,
     CONF_HISTORICAL_RAIN_DAYS,
     CONF_HUMIDITY_SENSOR,
     CONF_LAST_FERTILIZED_DATE,
     CONF_RAIN_SENSOR,
+    CONF_ROBOT_MOWER_ALLOW_NIGHT,
     CONF_SOIL_MOISTURE_SENSOR,
     CONF_TEMPERATURE_SENSOR,
     CONF_WEATHER_ENTITY,
-    DEFAULT_DAILY_UPDATE_HOUR,
     DEFAULT_FORECAST_RAIN_DAYS,
     DEFAULT_HISTORICAL_RAIN_DAYS,
     DEFAULT_UPDATE_INTERVAL,
@@ -42,8 +39,8 @@ LOGGER = logging.getLogger(__name__)
 STORAGE_VERSION = 1
 WEATHER_HISTORY_HOURS = 24
 MAX_WEATHER_HISTORY_KEEP_DAYS = 10
-SHOULD_MOW_LOCK_VERSION = 4
 SUN_ENTITY_ID = "sun.sun"
+UNAVAILABLE_STATES = {"unknown", "unavailable"}
 
 
 @dataclass(slots=True)
@@ -63,6 +60,8 @@ class LawnWeatherData:
     historical_humidity: float | None
     historical_rain: float | None
     sun_is_up: bool | None
+    unavailable_required_entities: tuple[str, ...]
+    unavailable_optional_entities: tuple[str, ...]
     month: int
 
 
@@ -86,29 +85,12 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Load stored snapshots and set up scheduled refreshes."""
         self._stored_data = await self._store.async_load() or {}
         self._unsub_refresh_times = [
-            async_track_time_change(
-                self.hass,
-                self._async_refresh_from_schedule,
-                hour=self.daily_update_hour,
-                minute=0,
-                second=0,
-            )
-        ]
-        if rain_sensor := self.config.get(CONF_RAIN_SENSOR):
-            self._unsub_refresh_times.append(
-                async_track_state_change_event(
-                    self.hass,
-                    [rain_sensor],
-                    self._async_refresh_from_rain_change,
-                )
-            )
-        self._unsub_refresh_times.append(
             async_track_state_change_event(
                 self.hass,
-                [SUN_ENTITY_ID],
-                self._async_refresh_from_sun_change,
+                _configured_source_entities(self.config),
+                self._async_refresh_from_source_change,
             )
-        )
+        ]
 
     async def async_shutdown(self) -> None:
         """Stop scheduled refreshes."""
@@ -116,29 +98,18 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             unsub()
         self._unsub_refresh_times = []
 
-    async def _async_refresh_from_schedule(self, now: datetime) -> None:
-        """Refresh when the daily lock starts."""
-        await self.async_request_refresh()
-
     @callback
-    def _async_refresh_from_rain_change(self, event: Event) -> None:
-        """Refresh immediately when the configured rain sensor changes."""
+    def _async_refresh_from_source_change(self, event: Event) -> None:
+        """Refresh immediately when a configured source entity changes."""
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
         if new_state is None:
             return
-        if old_state is not None and old_state.state == new_state.state:
-            return
-        self.hass.async_create_task(self.async_request_refresh())
-
-    @callback
-    def _async_refresh_from_sun_change(self, event: Event) -> None:
-        """Refresh immediately when the sun crosses the horizon."""
-        old_state = event.data.get("old_state")
-        new_state = event.data.get("new_state")
-        if new_state is None:
-            return
-        if old_state is not None and old_state.state == new_state.state:
+        if (
+            old_state is not None
+            and old_state.state == new_state.state
+            and old_state.attributes == new_state.attributes
+        ):
             return
         self.hass.async_create_task(self.async_request_refresh())
 
@@ -153,13 +124,6 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             config[CONF_DAYS_SINCE_FERTILIZER] = days_since_fertilizer
         return config
 
-    @property
-    def daily_update_hour(self) -> int:
-        """Return the configured daily update hour."""
-        return _valid_hour(
-            self.config.get(CONF_DAILY_UPDATE_HOUR), DEFAULT_DAILY_UPDATE_HOUR
-        )
-
     async def _async_update_data(self) -> dict[str, Any]:
         """Update all calculated advice."""
         forecasts = await self._async_get_forecasts()
@@ -167,78 +131,27 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         weather_data, history_saved = self._update_weather_history(weather_data)
         language = getattr(self.hass.config, "language", "en")
         advice = build_advice(self.config, weather_data, language)
-        advice, should_save = self._apply_locked_values(advice)
+        advice["availability"] = _availability_data(weather_data)
+        should_save = self._remove_legacy_should_mow_lock()
         should_save = should_save or history_saved
         if should_save:
             await self._store.async_save(self._stored_data)
         return advice
 
-    def _apply_locked_values(
-        self, advice: dict[str, Any]
-    ) -> tuple[dict[str, Any], bool]:
-        """Apply daily locks to selected advice values."""
-        now = dt_util.now()
-        date_key = now.date().isoformat()
-        lock_hour = self.daily_update_hour
-        should_save = False
-
-        advice, saved = self._apply_should_mow_lock(
-            advice, now, date_key, lock_hour
-        )
-        should_save = should_save or saved
-
-        return advice, should_save
-
-    def _apply_should_mow_lock(
-        self, advice: dict[str, Any], now: datetime, date_key: str, lock_hour: int
-    ) -> tuple[dict[str, Any], bool]:
-        """Lock the mowing decision once per day from the configured hour."""
-        lock = self._stored_data.get("should_mow")
-        should_save = False
-        if lock and lock.get("version") != SHOULD_MOW_LOCK_VERSION:
-            lock = None
-            self._stored_data.pop("should_mow", None)
-            should_save = True
-
-        if now.hour >= lock_hour and (
-            not lock or lock.get("date") != date_key
-            or lock.get("lock_hour") != lock_hour
-        ):
-            lock = {
-                "version": SHOULD_MOW_LOCK_VERSION,
-                "date": date_key,
-                "lock_hour": lock_hour,
-                "lock_time": _iso_at(now, lock_hour),
-                "locked_at": now.isoformat(),
-                "data": deepcopy(advice["should_mow"]),
-            }
-            self._stored_data["should_mow"] = lock
-            should_save = True
-
-        if lock:
-            live = deepcopy(advice["should_mow"])
-            locked = deepcopy(lock["data"])
-            locked["attributes"] = {
-                **locked.get("attributes", {}),
-                "locked": True,
-                "lock_time": lock.get("lock_time", lock["locked_at"]),
-                "next_update": _next_lock_start(now, lock_hour).isoformat(),
-                "live_value": live["value"],
-            }
-            advice["should_mow"] = locked
-        else:
-            advice["should_mow"]["attributes"] = {
-                **advice["should_mow"].get("attributes", {}),
-                "locked": False,
-                "next_update": _next_lock_start(now, lock_hour).isoformat(),
-            }
-
-        return advice, should_save
+    def _remove_legacy_should_mow_lock(self) -> bool:
+        """Remove the old daily mowing lock from stored coordinator data."""
+        if "should_mow" not in self._stored_data:
+            return False
+        self._stored_data.pop("should_mow", None)
+        return True
 
     async def _async_get_forecasts(self) -> dict[str, list[dict[str, Any]]]:
         """Fetch forecast data from the configured weather entity."""
         entity_id = self.config[CONF_WEATHER_ENTITY]
         forecasts: dict[str, list[dict[str, Any]]] = {}
+        weather_state = self.hass.states.get(entity_id)
+        if not _state_is_available(weather_state):
+            return forecasts
 
         for forecast_type in ("hourly", "daily"):
             try:
@@ -268,9 +181,22 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> LawnWeatherData:
         """Read weather and optional sensor states from Home Assistant."""
         config = self.config
+        unavailable_required_entities: list[str] = []
+        unavailable_optional_entities: list[str] = []
         weather_state = self.hass.states.get(config[CONF_WEATHER_ENTITY])
-        weather_attrs = weather_state.attributes if weather_state else {}
+        if _state_is_available(weather_state):
+            weather_attrs = weather_state.attributes
+            weather_state_value = weather_state.state
+        else:
+            weather_attrs = {}
+            weather_state_value = None
+            unavailable_required_entities.append(config[CONF_WEATHER_ENTITY])
         sun_state = self.hass.states.get(SUN_ENTITY_ID)
+        if (
+            not config.get(CONF_ROBOT_MOWER_ALLOW_NIGHT, True)
+            and not _state_is_available(sun_state)
+        ):
+            unavailable_optional_entities.append(SUN_ENTITY_ID)
 
         hourly_forecast = forecasts.get("hourly", [])
         daily_forecast = forecasts.get("daily", [])
@@ -279,12 +205,21 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         rain_forecast = daily_forecast or hourly_forecast or legacy_forecast
         first_forecast = short_forecast[0] if short_forecast else {}
 
-        temperature = self._read_float_sensor(CONF_TEMPERATURE_SENSOR)
-        humidity = self._read_float_sensor(CONF_HUMIDITY_SENSOR)
-        recent_rain = self._read_observed_rain(weather_attrs)
+        temperature = self._read_float_sensor(
+            CONF_TEMPERATURE_SENSOR,
+            unavailable_optional_entities,
+        )
+        humidity = self._read_float_sensor(
+            CONF_HUMIDITY_SENSOR,
+            unavailable_optional_entities,
+        )
+        recent_rain = self._read_observed_rain(
+            weather_attrs,
+            unavailable_optional_entities,
+        )
 
         return LawnWeatherData(
-            weather_state=weather_state.state if weather_state else None,
+            weather_state=weather_state_value,
             temperature=temperature
             if temperature is not None
             else _as_float(weather_attrs.get("temperature")),
@@ -293,7 +228,10 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else _as_float(weather_attrs.get("humidity")),
             recent_rain=recent_rain,
             recent_hour_rain=None,
-            soil_moisture=self._read_float_sensor(CONF_SOIL_MOISTURE_SENSOR),
+            soil_moisture=self._read_float_sensor(
+                CONF_SOIL_MOISTURE_SENSOR,
+                unavailable_optional_entities,
+            ),
             forecast_rain=_forecast_precipitation(short_forecast),
             forecast_rain_5_days=_forecast_precipitation_days(
                 rain_forecast,
@@ -308,24 +246,42 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             historical_humidity=None,
             historical_rain=None,
             sun_is_up=_sun_is_up(sun_state.state if sun_state else None),
+            unavailable_required_entities=tuple(
+                dict.fromkeys(unavailable_required_entities)
+            ),
+            unavailable_optional_entities=tuple(
+                dict.fromkeys(unavailable_optional_entities)
+            ),
             month=datetime.now().month,
         )
 
-    def _read_float_sensor(self, config_key: str) -> float | None:
+    def _read_float_sensor(
+        self,
+        config_key: str,
+        unavailable_entities: list[str],
+    ) -> float | None:
         """Read an optional numeric sensor configured by entity id."""
         entity_id = self.config.get(config_key)
         if not entity_id:
             return None
 
         state = self.hass.states.get(entity_id)
-        if state is None:
+        if not _state_is_available(state):
+            unavailable_entities.append(entity_id)
             return None
 
-        return _as_float(state.state)
+        value = _as_float(state.state)
+        if value is None:
+            unavailable_entities.append(entity_id)
+        return value
 
-    def _read_observed_rain(self, weather_attrs: dict[str, Any]) -> float | None:
+    def _read_observed_rain(
+        self,
+        weather_attrs: dict[str, Any],
+        unavailable_entities: list[str],
+    ) -> float | None:
         """Read observed rain, preferring a real rain sensor over weather attributes."""
-        rain_sensor = self._read_float_sensor(CONF_RAIN_SENSOR)
+        rain_sensor = self._read_float_sensor(CONF_RAIN_SENSOR, unavailable_entities)
         if rain_sensor is not None:
             return rain_sensor
 
@@ -349,7 +305,10 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         history_days = _int_config(
             self.config, CONF_HISTORICAL_RAIN_DAYS, DEFAULT_HISTORICAL_RAIN_DAYS
         )
-        history = self._stored_data.get("weather_history", [])
+        original_history = self._stored_data.get("weather_history", [])
+        if not isinstance(original_history, list):
+            original_history = []
+        history = original_history
         cutoff_keep = now - timedelta(
             days=max(MAX_WEATHER_HISTORY_KEEP_DAYS, history_days)
         )
@@ -360,15 +319,20 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if _parse_datetime(item.get("time")) is not None
             and _parse_datetime(item["time"]) >= cutoff_keep
         ]
-        history.append(
-            {
-                "time": now.isoformat(),
-                "temperature": weather_data.temperature,
-                "humidity": weather_data.humidity,
-                "rain": weather_data.recent_rain,
-            }
-        )
-        self._stored_data["weather_history"] = history
+        should_save = history != original_history
+        if _should_store_weather_history(weather_data):
+            history.append(
+                {
+                    "time": now.isoformat(),
+                    "temperature": weather_data.temperature,
+                    "humidity": weather_data.humidity,
+                    "rain": weather_data.recent_rain,
+                }
+            )
+            should_save = True
+
+        if should_save:
+            self._stored_data["weather_history"] = history
 
         cutoff_weather_summary = now - timedelta(hours=WEATHER_HISTORY_HOURS)
         recent_weather_items = [
@@ -397,7 +361,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 historical_rain=_rain_total_by_day(recent_rain_items),
                 recent_hour_rain=_rain_total_since(history, now - timedelta(hours=1)),
             ),
-            True,
+            should_save,
         )
 
 
@@ -407,6 +371,53 @@ def _as_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _configured_source_entities(config: dict[str, Any]) -> list[str]:
+    """Return source entities that should trigger an immediate refresh."""
+    entity_ids = [
+        config.get(CONF_WEATHER_ENTITY),
+        config.get(CONF_TEMPERATURE_SENSOR),
+        config.get(CONF_RAIN_SENSOR),
+        config.get(CONF_HUMIDITY_SENSOR),
+        config.get(CONF_SOIL_MOISTURE_SENSOR),
+        SUN_ENTITY_ID,
+    ]
+    return list(dict.fromkeys(entity_id for entity_id in entity_ids if entity_id))
+
+
+def _state_is_available(state: Any) -> bool:
+    """Return false for missing, unknown or unavailable Home Assistant states."""
+    if state is None:
+        return False
+    return state.state not in UNAVAILABLE_STATES
+
+
+def _availability_data(weather_data: LawnWeatherData) -> dict[str, Any]:
+    """Return shared source availability details for entity attributes."""
+    unavailable_required = list(weather_data.unavailable_required_entities)
+    unavailable_optional = list(weather_data.unavailable_optional_entities)
+    return {
+        "source_entities_available": not unavailable_required,
+        "unavailable_source_entities": unavailable_required + unavailable_optional,
+        "unavailable_required_entities": unavailable_required,
+        "unavailable_optional_entities": unavailable_optional,
+    }
+
+
+def _should_store_weather_history(weather_data: LawnWeatherData) -> bool:
+    """Return whether the current sample is valid enough for weather history."""
+    if weather_data.unavailable_required_entities:
+        return False
+
+    return any(
+        value is not None
+        for value in (
+            weather_data.temperature,
+            weather_data.humidity,
+            weather_data.recent_rain,
+        )
+    )
 
 
 def _sun_is_up(state: str | None) -> bool | None:
@@ -556,30 +567,3 @@ def _days_since_date(value: Any, now: datetime) -> int | None:
         return None
 
     return max(0, (now.date() - fertilized_date).days)
-
-
-def _iso_at(now: datetime, hour: int) -> str:
-    """Return an ISO timestamp for today at the given hour."""
-    return now.replace(hour=hour, minute=0, second=0, microsecond=0).isoformat()
-
-
-def _next_lock_start(now: datetime, hour: int) -> datetime:
-    """Return the next local lock time."""
-    next_start = now.replace(hour=hour, minute=0, second=0, microsecond=0)
-    if now >= next_start:
-        next_start += timedelta(days=1)
-    return next_start
-
-
-def _valid_hour(value: Any, default: int) -> int:
-    """Return a whole hour between 0 and 23."""
-    if not isinstance(value, int | float) or isinstance(value, bool):
-        return default
-
-    if not float(value).is_integer():
-        return default
-
-    hour = int(value)
-    if 0 <= hour <= 23:
-        return hour
-    return default

@@ -170,8 +170,13 @@ def calculate_robot_mower_advice(
         blocking_factors.append(text["robot_disabled"])
 
     night_mowing_allowed = config.get(CONF_ROBOT_MOWER_ALLOW_NIGHT, True)
-    if not night_mowing_allowed and weather.sun_is_up is False:
-        blocking_factors.append(text["robot_night"])
+    night_window_unknown = False
+    if not night_mowing_allowed:
+        if weather.sun_is_up is False:
+            blocking_factors.append(text["robot_night"])
+        elif weather.sun_is_up is None:
+            blocking_factors.append(text["robot_sun_unavailable"])
+            night_window_unknown = True
 
     if weather.weather_state in ("rainy", "pouring", "lightning-rainy", "hail"):
         blocking_factors.append(text["robot_weather"])
@@ -200,7 +205,7 @@ def calculate_robot_mower_advice(
     if growth["value"] in ("stopped", "slow"):
         blocking_factors.append(text["robot_limited_growth"])
 
-    allowed = not blocking_factors
+    allowed = None if night_window_unknown else not blocking_factors
     if allowed:
         reason = text["robot_ok"]
     else:
@@ -211,6 +216,7 @@ def calculate_robot_mower_advice(
         "attributes": {
             "blocking_factors": blocking_factors,
             "night_mowing_allowed": night_mowing_allowed,
+            "night_window_known": not night_window_unknown,
             "sun_is_up": weather.sun_is_up,
             "growth_rate": growth["value"],
             "estimated_mm_per_day": growth["attributes"]["estimated_mm_per_day"],
@@ -479,6 +485,7 @@ def _texts(language: str) -> dict[str, str]:
             "mow_not_needed": "Græsslåning er ikke nødvendig i dag.",
             "robot_disabled": "Robotplæneklipper er ikke aktiveret i integrationen.",
             "robot_night": "Robotklipning om natten er slået fra.",
+            "robot_sun_unavailable": "Solens status er utilgængelig, så natblokeringen kan ikke vurderes.",
             "robot_weather": "Det aktuelle vejr er ikke egnet til robotklipning.",
             "history_humidity": "Fugtighedshistorikken tyder på langsom tørring.",
             "history_cold": "Temperaturhistorikken er for kold til klipning.",
@@ -518,6 +525,7 @@ def _texts(language: str) -> dict[str, str]:
         "mow_not_needed": "Mowing is not needed today.",
         "robot_disabled": "Robotic mower is not enabled in this integration.",
         "robot_night": "Robot mowing at night is disabled.",
+        "robot_sun_unavailable": "Sun status is unavailable, so the night mowing block cannot be evaluated.",
         "robot_weather": "Current weather is not suitable for robot mowing.",
         "history_humidity": "Recent humidity history suggests slow drying.",
         "history_cold": "Recent temperature history is too cold for mowing.",

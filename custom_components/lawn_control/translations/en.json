@@ -15,7 +15,6 @@
           "lawn_type": "Lawn type",
           "robotic_mower": "Robotic mower",
           "robot_mower_allow_night": "Allow robot mowing at night",
-          "daily_update_hour": "Daily mowing assessment hour",
           "historical_rain_threshold": "Historical rain threshold",
           "forecast_rain_threshold": "Forecast rain threshold",
           "historical_rain_days": "Historical rain days",
@@ -35,7 +34,6 @@
         "data_description": {
           "rain_sensor": "Choose a sensor that shows total rain today so far, not current rain or rain per hour.",
           "robot_mower_allow_night": "When disabled, the robot mower will not be recommended between sunset and sunrise.",
-          "daily_update_hour": "Choose the hour when today's mowing recommendation is locked. Use 0-23, for example 8 for 08:00.",
           "historical_rain_threshold": "Minimum historical rain that can count as enough moisture by itself. Choose 5 to 15 mm.",
           "forecast_rain_threshold": "Minimum forecast rain that can count as enough upcoming moisture by itself. Choose 10 to 25 mm.",
           "historical_rain_days": "Number of past days used for historical rain. Choose 3 to 10 days.",
@@ -69,7 +67,6 @@
           "lawn_type": "Lawn type",
           "robotic_mower": "Robotic mower",
           "robot_mower_allow_night": "Allow robot mowing at night",
-          "daily_update_hour": "Daily mowing assessment hour",
           "historical_rain_threshold": "Historical rain threshold",
           "forecast_rain_threshold": "Forecast rain threshold",
           "historical_rain_days": "Historical rain days",
@@ -89,7 +86,6 @@
         "data_description": {
           "rain_sensor": "Choose a sensor that shows total rain today so far, not current rain or rain per hour.",
           "robot_mower_allow_night": "When disabled, the robot mower will not be recommended between sunset and sunrise.",
-          "daily_update_hour": "Choose the hour when today's mowing recommendation is locked. Use 0-23, for example 8 for 08:00.",
           "historical_rain_threshold": "Minimum historical rain that can count as enough moisture by itself. Choose 5 to 15 mm.",
           "forecast_rain_threshold": "Minimum forecast rain that can count as enough upcoming moisture by itself. Choose 10 to 25 mm.",
           "historical_rain_days": "Number of past days used for historical rain. Choose 3 to 10 days.",
@@ -301,18 +297,6 @@
           },
           "reason": {
             "name": "Reason"
-          },
-          "locked": {
-            "name": "Locked"
-          },
-          "lock_time": {
-            "name": "Lock time"
-          },
-          "next_update": {
-            "name": "Next update"
-          },
-          "live_value": {
-            "name": "Live value"
           }
         }
       },

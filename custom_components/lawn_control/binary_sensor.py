@@ -18,13 +18,18 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_ROBOTIC_MOWER, DOMAIN
 from .coordinator import LawnControlCoordinator
+from .entity import (
+    merge_availability_attributes,
+    read_entity_value,
+    sources_available,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
 class LawnBinarySensorEntityDescription(BinarySensorEntityDescription):
     """Description for a Lawn Control binary sensor."""
 
-    value_fn: Callable[[dict[str, Any]], bool]
+    value_fn: Callable[[dict[str, Any]], bool | None]
     attrs_fn: Callable[[dict[str, Any]], dict[str, Any]]
 
 
@@ -105,11 +110,26 @@ class LawnControlBinarySensor(
         )
 
     @property
-    def is_on(self) -> bool:
+    def is_on(self) -> bool | None:
         """Return true if the binary sensor is on."""
-        return self.entity_description.value_fn(self.coordinator.data)
+        return read_entity_value(
+            self.coordinator.data,
+            self.entity_description.value_fn,
+        )
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return transparent rule details."""
-        return self.entity_description.attrs_fn(self.coordinator.data)
+        return merge_availability_attributes(
+            self.coordinator.data,
+            self.entity_description.attrs_fn,
+        )
+
+    @property
+    def available(self) -> bool:
+        """Return whether this binary sensor has usable data."""
+        return (
+            super().available
+            and sources_available(self.coordinator.data)
+            and self.is_on is not None
+        )
