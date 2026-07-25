@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import math
+from copy import deepcopy
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Any
@@ -11,34 +13,42 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import (
     async_track_state_change_event,
+    async_track_time_change,
 )
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_DAILY_UPDATE_HOUR,
     CONF_DAYS_SINCE_FERTILIZER,
     CONF_FORECAST_RAIN_DAYS,
     CONF_HISTORICAL_RAIN_DAYS,
     CONF_HUMIDITY_SENSOR,
     CONF_LAST_FERTILIZED_DATE,
+    CONF_MOWING_UPDATE_CADENCE,
     CONF_RAIN_SENSOR,
+    CONF_ROBOTIC_MOWER,
     CONF_ROBOT_MOWER_ALLOW_NIGHT,
     CONF_SOIL_MOISTURE_SENSOR,
     CONF_TEMPERATURE_SENSOR,
     CONF_WEATHER_ENTITY,
+    DEFAULT_DAILY_UPDATE_HOUR,
     DEFAULT_FORECAST_RAIN_DAYS,
     DEFAULT_HISTORICAL_RAIN_DAYS,
+    DEFAULT_MOWING_UPDATE_CADENCE,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    MOWING_UPDATE_CADENCES,
 )
-from .rules.care import build_advice
+from .rules.care import build_advice, general_recommendation
 
 LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 1
 WEATHER_HISTORY_HOURS = 24
 MAX_WEATHER_HISTORY_KEEP_DAYS = 10
+MOWING_LOCK_VERSION = 5
 SUN_ENTITY_ID = "sun.sun"
 UNAVAILABLE_STATES = {"unknown", "unavailable"}
 
@@ -85,6 +95,12 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Load stored snapshots and set up scheduled refreshes."""
         self._stored_data = await self._store.async_load() or {}
         self._unsub_refresh_times = [
+            async_track_time_change(
+                self.hass,
+                self._async_refresh_from_period_boundary,
+                minute=0,
+                second=0,
+            ),
             async_track_state_change_event(
                 self.hass,
                 _configured_source_entities(self.config),
@@ -97,6 +113,18 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for unsub in self._unsub_refresh_times:
             unsub()
         self._unsub_refresh_times = []
+
+    async def _async_refresh_from_period_boundary(self, now: datetime) -> None:
+        """Refresh when a mowing update period can start."""
+        await self.async_request_refresh()
+
+    @property
+    def daily_update_hour(self) -> int:
+        """Return the configured daily mowing update hour."""
+        return _valid_hour(
+            self.config.get(CONF_DAILY_UPDATE_HOUR),
+            DEFAULT_DAILY_UPDATE_HOUR,
+        )
 
     @callback
     def _async_refresh_from_source_change(self, event: Event) -> None:
@@ -132,18 +160,157 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         language = getattr(self.hass.config, "language", "en")
         advice = build_advice(self.config, weather_data, language)
         advice["availability"] = _availability_data(weather_data)
-        should_save = self._remove_legacy_should_mow_lock()
+        advice, should_save = self._apply_mowing_cadence_lock(advice)
+        self._apply_mowing_time_window(advice, weather_data, language)
+        self._refresh_care_recommendation(advice, language)
         should_save = should_save or history_saved
         if should_save:
             await self._store.async_save(self._stored_data)
         return advice
 
-    def _remove_legacy_should_mow_lock(self) -> bool:
-        """Remove the old daily mowing lock from stored coordinator data."""
-        if "should_mow" not in self._stored_data:
-            return False
-        self._stored_data.pop("should_mow", None)
-        return True
+    def _apply_mowing_cadence_lock(
+        self,
+        advice: dict[str, Any],
+    ) -> tuple[dict[str, Any], bool]:
+        """Keep mowing advice stable for the configured update cadence."""
+        availability = advice.get("availability", {})
+        if not availability.get("source_entities_available", True):
+            return advice, False
+
+        now = dt_util.now()
+        cadence = _mowing_update_cadence(self.config.get(CONF_MOWING_UPDATE_CADENCE))
+        period_start = _mowing_period_start(now, cadence, self.daily_update_hour)
+        next_update = _next_mowing_period_start(period_start, cadence)
+        period_key = period_start.isoformat()
+        lock = self._stored_data.get("should_mow")
+        should_save = False
+
+        if (
+            not isinstance(lock, dict)
+            or lock.get("version") != MOWING_LOCK_VERSION
+            or lock.get("cadence") != cadence
+            or lock.get("period_start") != period_key
+        ):
+            lock = {
+                "version": MOWING_LOCK_VERSION,
+                "cadence": cadence,
+                "period_start": period_key,
+                "next_update": next_update.isoformat(),
+                "locked_at": now.isoformat(),
+                "data": deepcopy(advice["should_mow"]),
+            }
+            self._stored_data["should_mow"] = lock
+            should_save = True
+
+        live = deepcopy(advice["should_mow"])
+        locked = deepcopy(lock["data"])
+        locked["attributes"] = {
+            **locked.get("attributes", {}),
+            "locked": True,
+            "mowing_update_cadence": cadence,
+            "lock_time": lock.get("period_start", lock["locked_at"]),
+            "next_update": lock.get("next_update", next_update.isoformat()),
+            "live_value": live["value"],
+        }
+        advice["should_mow"] = locked
+
+        return advice, should_save
+
+    def _refresh_care_recommendation(
+        self,
+        advice: dict[str, Any],
+        language: str,
+    ) -> None:
+        """Keep the summary aligned with the effective mowing recommendation."""
+        robotic_mower = bool(self.config.get(CONF_ROBOTIC_MOWER))
+        active_mowing = (
+            advice["robot_mower_should_run"] if robotic_mower else advice["should_mow"]
+        )
+        advice["care_recommendation"] = general_recommendation(
+            advice["drought_risk"],
+            advice["fertilizer_score"],
+            active_mowing,
+            advice["growth_rate"],
+            language,
+            robotic_mower,
+        )
+
+    def _apply_mowing_time_window(
+        self,
+        advice: dict[str, Any],
+        weather_data: LawnWeatherData,
+        language: str,
+    ) -> None:
+        """Prevent mowing before the configured start time when night mowing is off."""
+        if self.config.get(CONF_ROBOT_MOWER_ALLOW_NIGHT, True):
+            return
+
+        now = dt_util.now()
+        daily_hour = self.daily_update_hour
+        text = _mowing_time_texts(language)
+
+        if weather_data.sun_is_up is None:
+            self._block_mowing_advice(
+                advice["should_mow"],
+                text["sun_unavailable"],
+                None,
+                daily_hour,
+            )
+            return
+
+        if weather_data.sun_is_up is False:
+            self._block_mowing_advice(
+                advice["should_mow"],
+                text["night_block"],
+                False,
+                daily_hour,
+            )
+            return
+
+        if now.hour < daily_hour:
+            reason = text["start_hour_block"].format(hour=daily_hour)
+            self._block_mowing_advice(advice["should_mow"], reason, False, daily_hour)
+            self._block_mowing_advice(
+                advice["robot_mower_should_run"],
+                reason,
+                False,
+                daily_hour,
+            )
+            return
+
+        self._mark_mowing_time_window_open(advice["should_mow"], daily_hour)
+        self._mark_mowing_time_window_open(
+            advice["robot_mower_should_run"],
+            daily_hour,
+        )
+
+    def _block_mowing_advice(
+        self,
+        mowing_advice: dict[str, Any],
+        reason: str,
+        value: bool | None,
+        daily_hour: int,
+    ) -> None:
+        """Block a mowing advice payload with shared time window attributes."""
+        attributes = mowing_advice.setdefault("attributes", {})
+        blocking_factors = list(attributes.get("blocking_factors", []))
+        if reason not in blocking_factors:
+            blocking_factors.append(reason)
+        attributes["blocking_factors"] = blocking_factors
+        attributes["mowing_time_window_open"] = False
+        attributes["mowing_allowed_from_hour"] = daily_hour
+        attributes["reason"] = " ".join(blocking_factors)
+        mowing_advice["value"] = value
+
+    def _mark_mowing_time_window_open(
+        self,
+        mowing_advice: dict[str, Any],
+        daily_hour: int,
+    ) -> None:
+        """Mark a mowing advice payload as inside the allowed time window."""
+        attributes = mowing_advice.setdefault("attributes", {})
+        attributes["mowing_time_window_open"] = True
+        attributes["mowing_allowed_from_hour"] = daily_hour
 
     async def _async_get_forecasts(self) -> dict[str, list[dict[str, Any]]]:
         """Fetch forecast data from the configured weather entity."""
@@ -418,6 +585,73 @@ def _should_store_weather_history(weather_data: LawnWeatherData) -> bool:
             weather_data.recent_rain,
         )
     )
+
+
+def _mowing_update_cadence(value: Any) -> str:
+    """Return a valid mowing update cadence."""
+    if value in MOWING_UPDATE_CADENCES:
+        return str(value)
+    return DEFAULT_MOWING_UPDATE_CADENCE
+
+
+def _mowing_period_start(now: datetime, cadence: str, daily_hour: int) -> datetime:
+    """Return the start of the current mowing update period."""
+    anchor = now.replace(hour=daily_hour, minute=0, second=0, microsecond=0)
+    if cadence == "daily":
+        if now < anchor:
+            return anchor - timedelta(days=1)
+        return anchor
+
+    period_hours = _mowing_period_hours(cadence)
+    seconds_since_anchor = (now - anchor).total_seconds()
+    periods_since_anchor = math.floor(seconds_since_anchor / (period_hours * 3600))
+    return anchor + timedelta(hours=periods_since_anchor * period_hours)
+
+
+def _next_mowing_period_start(period_start: datetime, cadence: str) -> datetime:
+    """Return when the current mowing update period ends."""
+    if cadence == "daily":
+        return period_start + timedelta(days=1)
+    return period_start + timedelta(hours=_mowing_period_hours(cadence))
+
+
+def _mowing_period_hours(cadence: str) -> int:
+    """Return the number of hours in a non-daily mowing update period."""
+    if cadence == "4_hours":
+        return 4
+    if cadence == "6_hours":
+        return 6
+    return 1
+
+
+def _valid_hour(value: Any, default: int) -> int:
+    """Return a whole hour between 0 and 23."""
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        return default
+
+    if not float(value).is_integer():
+        return default
+
+    hour = int(value)
+    if 0 <= hour <= 23:
+        return hour
+    return default
+
+
+def _mowing_time_texts(language: str) -> dict[str, str]:
+    """Return localized mowing time window text."""
+    if language.lower().startswith("da"):
+        return {
+            "night_block": "Klipning om natten er slået fra.",
+            "start_hour_block": "Klipning er først tilladt fra kl. {hour:02d}:00.",
+            "sun_unavailable": "Solens status er utilgængelig, så klippetidsvinduet kan ikke vurderes.",
+        }
+
+    return {
+        "night_block": "Mowing at night is disabled.",
+        "start_hour_block": "Mowing is only allowed from {hour:02d}:00.",
+        "sun_unavailable": "Sun status is unavailable, so the mowing time window cannot be evaluated.",
+    }
 
 
 def _sun_is_up(state: str | None) -> bool | None:

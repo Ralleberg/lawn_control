@@ -15,6 +15,7 @@ from homeassistant.helpers import selector
 from .const import (
     CARE_LEVELS,
     CONF_CARE_LEVEL,
+    CONF_DAILY_UPDATE_HOUR,
     CONF_FERTILIZER_K_PERCENT,
     CONF_FERTILIZER_N_PERCENT,
     CONF_FERTILIZER_P_PERCENT,
@@ -27,6 +28,7 @@ from .const import (
     CONF_LAST_FERTILIZED_DATE,
     CONF_MAX_GRASS_HEIGHT,
     CONF_MIN_GRASS_HEIGHT,
+    CONF_MOWING_UPDATE_CADENCE,
     CONF_RAIN_SENSOR,
     CONF_ROBOT_MOWER_ALLOW_NIGHT,
     CONF_ROBOTIC_MOWER,
@@ -37,14 +39,17 @@ from .const import (
     CONF_WATER_DURING_DROUGHT,
     CONF_WATERING_LEVEL,
     CONF_WEATHER_ENTITY,
+    DEFAULT_DAILY_UPDATE_HOUR,
     DEFAULT_FORECAST_RAIN_DAYS,
     DEFAULT_FORECAST_RAIN_THRESHOLD,
     DEFAULT_HISTORICAL_RAIN_DAYS,
     DEFAULT_HISTORICAL_RAIN_THRESHOLD,
     DEFAULT_MAX_GRASS_HEIGHT,
     DEFAULT_MIN_GRASS_HEIGHT,
+    DEFAULT_MOWING_UPDATE_CADENCE,
     DOMAIN,
     LAWN_TYPES,
+    MOWING_UPDATE_CADENCES,
     SHADE_LEVELS,
     SOIL_TYPES,
     WATERING_LEVELS,
@@ -97,6 +102,32 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 CONF_ROBOT_MOWER_ALLOW_NIGHT,
                 default=defaults.get(CONF_ROBOT_MOWER_ALLOW_NIGHT, True),
             ): selector.BooleanSelector(),
+            vol.Required(
+                CONF_MOWING_UPDATE_CADENCE,
+                default=defaults.get(
+                    CONF_MOWING_UPDATE_CADENCE,
+                    DEFAULT_MOWING_UPDATE_CADENCE,
+                ),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=MOWING_UPDATE_CADENCES,
+                    translation_key=CONF_MOWING_UPDATE_CADENCE,
+                )
+            ),
+            vol.Required(
+                CONF_DAILY_UPDATE_HOUR,
+                default=defaults.get(
+                    CONF_DAILY_UPDATE_HOUR, DEFAULT_DAILY_UPDATE_HOUR
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0,
+                    max=23,
+                    step=1,
+                    mode=selector.NumberSelectorMode.SLIDER,
+                    unit_of_measurement="h",
+                )
+            ),
             vol.Required(
                 CONF_HISTORICAL_RAIN_THRESHOLD,
                 default=defaults.get(
@@ -271,6 +302,8 @@ def _clean_user_input(user_input: dict[str, Any]) -> dict[str, Any]:
     }
     cleaned.setdefault(CONF_ROBOTIC_MOWER, False)
     cleaned.setdefault(CONF_ROBOT_MOWER_ALLOW_NIGHT, True)
+    cleaned.setdefault(CONF_MOWING_UPDATE_CADENCE, DEFAULT_MOWING_UPDATE_CADENCE)
+    cleaned.setdefault(CONF_DAILY_UPDATE_HOUR, DEFAULT_DAILY_UPDATE_HOUR)
     cleaned.setdefault(
         CONF_HISTORICAL_RAIN_THRESHOLD, DEFAULT_HISTORICAL_RAIN_THRESHOLD
     )
@@ -299,6 +332,16 @@ def _is_whole_number_in_range(value: Any, minimum: int, maximum: int) -> bool:
     if not isinstance(value, int | float) or isinstance(value, bool):
         return False
     return float(value).is_integer() and minimum <= int(value) <= maximum
+
+
+def _is_valid_hour(value: Any) -> bool:
+    """Return true if value is a whole hour between 0 and 23."""
+    return _is_whole_number_in_range(value, 0, 23)
+
+
+def _is_valid_mowing_update_cadence(value: Any) -> bool:
+    """Return true if value is a known mowing update cadence."""
+    return value in MOWING_UPDATE_CADENCES
 
 
 def _rain_setting_errors(user_input: dict[str, Any]) -> dict[str, str]:
@@ -332,6 +375,12 @@ class LawnControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors.update(_rain_setting_errors(user_input))
             if user_input[CONF_MIN_GRASS_HEIGHT] >= user_input[CONF_MAX_GRASS_HEIGHT]:
                 errors["base"] = "height_range"
+            elif not _is_valid_mowing_update_cadence(
+                user_input.get(CONF_MOWING_UPDATE_CADENCE)
+            ):
+                errors[CONF_MOWING_UPDATE_CADENCE] = "invalid_mowing_update_cadence"
+            elif not _is_valid_hour(user_input.get(CONF_DAILY_UPDATE_HOUR)):
+                errors[CONF_DAILY_UPDATE_HOUR] = "invalid_hour"
             elif user_input.get(CONF_LAST_FERTILIZED_DATE) and not _is_valid_date(
                 user_input[CONF_LAST_FERTILIZED_DATE]
             ):
@@ -376,6 +425,12 @@ class LawnControlOptionsFlow(config_entries.OptionsFlow):
             errors.update(_rain_setting_errors(user_input))
             if user_input[CONF_MIN_GRASS_HEIGHT] >= user_input[CONF_MAX_GRASS_HEIGHT]:
                 errors["base"] = "height_range"
+            elif not _is_valid_mowing_update_cadence(
+                user_input.get(CONF_MOWING_UPDATE_CADENCE)
+            ):
+                errors[CONF_MOWING_UPDATE_CADENCE] = "invalid_mowing_update_cadence"
+            elif not _is_valid_hour(user_input.get(CONF_DAILY_UPDATE_HOUR)):
+                errors[CONF_DAILY_UPDATE_HOUR] = "invalid_hour"
             elif user_input.get(CONF_LAST_FERTILIZED_DATE) and not _is_valid_date(
                 user_input[CONF_LAST_FERTILIZED_DATE]
             ):

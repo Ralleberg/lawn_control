@@ -14,6 +14,7 @@ CONF_SOIL_MOISTURE_SENSOR = "soil_moisture_sensor"
 CONF_LAWN_TYPE = "lawn_type"
 CONF_ROBOTIC_MOWER = "robotic_mower"
 CONF_ROBOT_MOWER_ALLOW_NIGHT = "robot_mower_allow_night"
+CONF_MOWING_UPDATE_CADENCE = "mowing_update_cadence"
 CONF_SHADE_LEVEL = "shade_level"
 CONF_SOIL_TYPE = "soil_type"
 CONF_CARE_LEVEL = "care_level"
@@ -26,6 +27,7 @@ CONF_FERTILIZER_P_PERCENT = "fertilizer_p_percent"
 CONF_FERTILIZER_K_PERCENT = "fertilizer_k_percent"
 CONF_DAYS_SINCE_FERTILIZER = "days_since_fertilizer"
 CONF_LAST_FERTILIZED_DATE = "last_fertilized_date"
+CONF_DAILY_UPDATE_HOUR = "daily_update_hour"
 CONF_HISTORICAL_RAIN_THRESHOLD = "historical_rain_threshold"
 CONF_FORECAST_RAIN_THRESHOLD = "forecast_rain_threshold"
 CONF_HISTORICAL_RAIN_DAYS = "historical_rain_days"
@@ -39,8 +41,11 @@ DEFAULT_FORECAST_RAIN_THRESHOLD = 20
 DEFAULT_HISTORICAL_RAIN_DAYS = 5
 DEFAULT_FORECAST_RAIN_DAYS = 5
 DEFAULT_UPDATE_INTERVAL = timedelta(hours=1)
+DEFAULT_DAILY_UPDATE_HOUR = 8
+DEFAULT_MOWING_UPDATE_CADENCE = "hourly"
 
 LAWN_TYPES = ["regular", "ornamental", "wear_tolerant", "shade"]
+MOWING_UPDATE_CADENCES = ["hourly", "4_hours", "6_hours", "daily"]
 SHADE_LEVELS = ["low", "medium", "high"]
 SOIL_TYPES = ["sandy", "normal", "clay"]
 CARE_LEVELS = ["low", "normal", "high"]
