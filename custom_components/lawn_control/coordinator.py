@@ -508,14 +508,6 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if _parse_datetime(item.get("time")) is not None
             and _parse_datetime(item["time"]) >= cutoff_weather_summary
         ]
-        cutoff_rain_summary = now - timedelta(days=history_days)
-        recent_rain_items = [
-            item
-            for item in history
-            if _parse_datetime(item.get("time")) is not None
-            and _parse_datetime(item["time"]) >= cutoff_rain_summary
-        ]
-
         return (
             replace(
                 weather_data,
@@ -525,7 +517,10 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 historical_humidity=_average(
                     item.get("humidity") for item in recent_weather_items
                 ),
-                historical_rain=_rain_total_by_day(recent_rain_items),
+                historical_rain=_rain_total_since(
+                    history,
+                    now - timedelta(hours=history_days * 24),
+                ),
                 recent_hour_rain=_rain_total_since(history, now - timedelta(hours=1)),
             ),
             should_save,
@@ -743,51 +738,74 @@ def _average(values: Any) -> float | None:
     return round(sum(numbers) / len(numbers), 1)
 
 
-def _rain_total_by_day(items: list[dict[str, Any]]) -> float | None:
-    """Sum daily rain maximums to avoid double-counting repeated sensor updates."""
-    daily_max: dict[str, float] = {}
-    for item in items:
-        item_time = _parse_datetime(item.get("time"))
-        rain = _as_float(item.get("rain"))
-        if item_time is None or rain is None:
-            continue
-
-        day = item_time.date().isoformat()
-        daily_max[day] = max(daily_max.get(day, 0.0), rain)
-
-    if not daily_max:
-        return None
-    return round(sum(daily_max.values()), 1)
-
-
 def _rain_total_since(items: list[dict[str, Any]], since: datetime) -> float | None:
-    """Return rain added since a time from a daily cumulative rain sensor."""
-    timed_values = [
-        (item_time, rain)
-        for item in items
-        if (item_time := _parse_datetime(item.get("time"))) is not None
-        and (rain := _as_float(item.get("rain"))) is not None
-    ]
+    """Return rain added since a time from a cumulative daily rain sensor.
+
+    The configured rain sensor is expected to report total rain for the current
+    day. Some sources reset after midnight with a delay, so calendar-day maximums
+    can count yesterday's rain again after midnight. Summing only positive
+    changes makes the calculation resilient to delayed resets while keeping a
+    rolling hour-based rain history.
+    """
+    timed_values = sorted(
+        [
+            (item_time, rain)
+            for item in items
+            if (item_time := _parse_datetime(item.get("time"))) is not None
+            and (rain := _as_float(item.get("rain"))) is not None
+        ],
+        key=lambda item: item[0],
+    )
     if not timed_values:
         return None
 
-    current_time, current_rain = max(timed_values, key=lambda item: item[0])
-    same_day_values = [
-        (item_time, rain)
-        for item_time, rain in timed_values
-        if item_time.date() == current_time.date() and item_time <= current_time
-    ]
-    previous_values = [
-        (item_time, rain) for item_time, rain in same_day_values if item_time <= since
-    ]
-    if previous_values:
-        _, previous_rain = max(previous_values, key=lambda item: item[0])
-    elif len(same_day_values) > 1:
-        _, previous_rain = min(same_day_values, key=lambda item: item[0])
-    else:
+    if timed_values[-1][0] <= since:
         return 0.0
 
-    return round(max(0.0, current_rain - previous_rain), 1)
+    total = 0.0
+    counted_by_day: dict[str, float] = {}
+    previous_time, previous_rain = timed_values[0]
+    found_window_sample = False
+
+    for item_time, rain in timed_values[1:]:
+        day = item_time.date().isoformat()
+        increase = _rain_increase(
+            previous_time,
+            previous_rain,
+            item_time,
+            rain,
+            counted_by_day.get(day, 0.0),
+        )
+        if increase > 0:
+            counted_by_day[day] = counted_by_day.get(day, 0.0) + increase
+            if item_time > since:
+                total += increase
+
+        if item_time > since:
+            found_window_sample = True
+        previous_time = item_time
+        previous_rain = rain
+
+    return round(total, 1) if found_window_sample else 0.0
+
+
+def _rain_increase(
+    previous_time: datetime,
+    previous_rain: float,
+    item_time: datetime,
+    rain: float,
+    counted_today: float,
+) -> float:
+    """Return the rain increment between two cumulative rain samples."""
+    if rain >= previous_rain:
+        return rain - previous_rain
+
+    # A drop means the daily rain sensor reset. If the reset was delayed past
+    # midnight, positive stale increases may already have counted today's rain.
+    if item_time.date() == previous_time.date():
+        return max(0.0, rain - counted_today)
+
+    return rain
 
 
 def _days_since_date(value: Any, now: datetime) -> int | None:
