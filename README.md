@@ -290,9 +290,3 @@ python -m compileall custom_components
 Contributions are always welcome.
 
 If you discover a bug, have ideas for improvements, or would like to enhance the rule engine, please open an issue or submit a pull request.
-
----
-
-# License
-
-This project is released under the MIT License.
