@@ -16,6 +16,7 @@ TO_REDACT = {
     "rain_sensor",
     "humidity_sensor",
     "soil_moisture_sensor",
+    "robot_mower_entity",
 }
 
 

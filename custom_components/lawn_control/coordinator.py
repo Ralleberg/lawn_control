@@ -30,6 +30,7 @@ from .const import (
     CONF_RAIN_SENSOR,
     CONF_ROBOTIC_MOWER,
     CONF_ROBOT_MOWER_ALLOW_NIGHT,
+    CONF_ROBOT_MOWER_ENTITY,
     CONF_SOIL_MOISTURE_SENSOR,
     CONF_TEMPERATURE_SENSOR,
     CONF_WEATHER_ENTITY,
@@ -48,7 +49,13 @@ LOGGER = logging.getLogger(__name__)
 STORAGE_VERSION = 1
 WEATHER_HISTORY_HOURS = 24
 MAX_WEATHER_HISTORY_KEEP_DAYS = 10
+GROWTH_HISTORY_KEEP_DAYS = 21
 MOWING_LOCK_VERSION = 5
+ROBOT_CATCH_UP_TRIGGER_MM = 3.0
+ROBOT_CATCH_UP_COOLDOWN = timedelta(hours=48)
+ROBOT_MOWER_MOWING_STATE = "mowing"
+ROBOT_MOWER_FINISHED_STATES = {"docked", "returning"}
+ROBOT_MOWER_ERROR_STATE = "error"
 SUN_ENTITY_ID = "sun.sun"
 UNAVAILABLE_STATES = {"unknown", "unavailable"}
 
@@ -160,13 +167,185 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         language = getattr(self.hass.config, "language", "en")
         advice = build_advice(self.config, weather_data, language)
         advice["availability"] = _availability_data(weather_data)
+        mower_saved = self._update_robot_mower_tracking(advice)
+        growth_saved = self._update_growth_history(advice)
+        self._apply_robot_mower_catch_up(advice, weather_data, language)
         advice, should_save = self._apply_mowing_frequency_lock(advice)
         self._apply_mowing_time_window(advice, weather_data, language)
         self._refresh_care_recommendation(advice, language)
-        should_save = should_save or history_saved
+        should_save = should_save or history_saved or mower_saved or growth_saved
         if should_save:
             await self._store.async_save(self._stored_data)
         return advice
+
+    def _update_robot_mower_tracking(self, advice: dict[str, Any]) -> bool:
+        """Track completed robot mower runs from the configured mower entity."""
+        entity_id = self.config.get(CONF_ROBOT_MOWER_ENTITY)
+        if not entity_id:
+            return False
+
+        state = self.hass.states.get(entity_id)
+        if not _state_is_available(state):
+            return False
+
+        now = dt_util.now()
+        tracker = self._stored_data.get("robot_mower")
+        if not isinstance(tracker, dict) or tracker.get("entity_id") != entity_id:
+            tracker = {"entity_id": entity_id}
+
+        original_tracker = deepcopy(tracker)
+        previous_state = tracker.get("state")
+        current_state = state.state
+        tracker["state"] = current_state
+
+        if (
+            current_state == ROBOT_MOWER_MOWING_STATE
+            and previous_state != ROBOT_MOWER_MOWING_STATE
+        ):
+            tracker["mowing_started_at"] = now.isoformat()
+
+        if (
+            previous_state == ROBOT_MOWER_MOWING_STATE
+            and current_state in ROBOT_MOWER_FINISHED_STATES
+        ):
+            tracker["last_mowed_at"] = now.isoformat()
+            tracker["last_mowed_height"] = advice["recommended_grass_height"]["value"]
+            tracker.pop("mowing_started_at", None)
+
+        if tracker != original_tracker:
+            self._stored_data["robot_mower"] = tracker
+            return True
+
+        return False
+
+    def _update_growth_history(self, advice: dict[str, Any]) -> bool:
+        """Store hourly grass growth estimates for later mower catch-up decisions."""
+        availability = advice.get("availability", {})
+        if not availability.get("source_entities_available", True):
+            return False
+
+        growth_rate = _as_float(
+            advice.get("growth_rate", {})
+            .get("attributes", {})
+            .get("estimated_mm_per_day")
+        )
+        if growth_rate is None:
+            return False
+
+        now = dt_util.now()
+        sample_time = now.replace(minute=0, second=0, microsecond=0)
+        original_history = self._stored_data.get("growth_history", [])
+        if not isinstance(original_history, list):
+            original_history = []
+
+        cutoff = now - timedelta(days=GROWTH_HISTORY_KEEP_DAYS)
+        history = [
+            item
+            for item in original_history
+            if _parse_datetime(item.get("time")) is not None
+            and _parse_datetime(item["time"]) >= cutoff
+        ]
+        sample = {"time": sample_time.isoformat(), "growth": growth_rate}
+        if history and history[-1].get("time") == sample["time"]:
+            history[-1] = sample
+        else:
+            history.append(sample)
+
+        if history == original_history:
+            return False
+
+        self._stored_data["growth_history"] = history
+        return True
+
+    def _apply_robot_mower_catch_up(
+        self,
+        advice: dict[str, Any],
+        weather_data: LawnWeatherData,
+        language: str,
+    ) -> None:
+        """Allow occasional robot catch-up mowing when grass is getting too high."""
+        if not self.config.get(CONF_ROBOTIC_MOWER):
+            return
+
+        robot_advice = advice["robot_mower_should_run"]
+        if robot_advice.get("value") is not False:
+            return
+
+        availability = advice.get("availability", {})
+        if not availability.get("source_entities_available", True):
+            return
+
+        if self._robot_catch_up_hard_blocked(advice, weather_data):
+            return
+
+        now = dt_util.now()
+        tracker = self._stored_data.get("robot_mower")
+        if not isinstance(tracker, dict):
+            return
+
+        last_mowed_at = _parse_datetime(tracker.get("last_mowed_at"))
+        last_mowed_height = _as_float(tracker.get("last_mowed_height"))
+        target_height = _as_float(advice["recommended_grass_height"]["value"])
+        if (
+            last_mowed_at is None
+            or last_mowed_height is None
+            or target_height is None
+            or now - last_mowed_at < ROBOT_CATCH_UP_COOLDOWN
+        ):
+            return
+
+        growth_since_mowed = _growth_total_since(
+            self._stored_data.get("growth_history", []),
+            last_mowed_at,
+            now,
+        )
+        if growth_since_mowed is None:
+            return
+
+        estimated_height = last_mowed_height + growth_since_mowed
+        if estimated_height < target_height + ROBOT_CATCH_UP_TRIGGER_MM:
+            return
+
+        attributes = robot_advice.setdefault("attributes", {})
+        attributes["blocking_factors"] = []
+        attributes["reason"] = _robot_catch_up_text(language)
+        robot_advice["value"] = True
+
+    def _robot_catch_up_hard_blocked(
+        self,
+        advice: dict[str, Any],
+        weather_data: LawnWeatherData,
+    ) -> bool:
+        """Return whether catch-up mowing must remain blocked."""
+        entity_id = self.config.get(CONF_ROBOT_MOWER_ENTITY)
+        if entity_id:
+            state = self.hass.states.get(entity_id)
+            if not _state_is_available(state) or state.state == ROBOT_MOWER_ERROR_STATE:
+                return True
+
+        if (
+            not self.config.get(CONF_ROBOT_MOWER_ALLOW_NIGHT, True)
+            and weather_data.sun_is_up is not True
+        ):
+            return True
+
+        if weather_data.weather_state in ("rainy", "pouring", "lightning-rainy", "hail"):
+            return True
+
+        if (
+            weather_data.recent_hour_rain is not None
+            and weather_data.recent_hour_rain >= 5
+        ):
+            return True
+
+        if advice["drought_risk"]["value"] in ("high", "critical"):
+            return True
+
+        temperature = _first_known_float(
+            weather_data.temperature,
+            weather_data.historical_temperature,
+        )
+        return temperature is not None and temperature < 6
 
     def _apply_mowing_frequency_lock(
         self,
@@ -364,6 +543,10 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             and not _state_is_available(sun_state)
         ):
             unavailable_optional_entities.append(SUN_ENTITY_ID)
+        mower_entity_id = config.get(CONF_ROBOT_MOWER_ENTITY)
+        mower_state = self.hass.states.get(mower_entity_id) if mower_entity_id else None
+        if mower_entity_id and not _state_is_available(mower_state):
+            unavailable_optional_entities.append(mower_entity_id)
 
         hourly_forecast = forecasts.get("hourly", [])
         daily_forecast = forecasts.get("daily", [])
@@ -543,6 +726,7 @@ def _configured_source_entities(config: dict[str, Any]) -> list[str]:
         config.get(CONF_RAIN_SENSOR),
         config.get(CONF_HUMIDITY_SENSOR),
         config.get(CONF_SOIL_MOISTURE_SENSOR),
+        config.get(CONF_ROBOT_MOWER_ENTITY),
         SUN_ENTITY_ID,
     ]
     return list(dict.fromkeys(entity_id for entity_id in entity_ids if entity_id))
@@ -736,6 +920,70 @@ def _average(values: Any) -> float | None:
     if not numbers:
         return None
     return round(sum(numbers) / len(numbers), 1)
+
+
+def _growth_total_since(
+    items: list[dict[str, Any]],
+    since: datetime,
+    now: datetime,
+) -> float | None:
+    """Return estimated grass growth since a time from hourly growth samples."""
+    if not isinstance(items, list):
+        return None
+
+    timed_values = sorted(
+        [
+            (item_time, growth)
+            for item in items
+            if (item_time := _parse_datetime(item.get("time"))) is not None
+            and (growth := _as_float(item.get("growth"))) is not None
+        ],
+        key=lambda item: item[0],
+    )
+    if not timed_values:
+        return None
+
+    total = 0.0
+    previous_time: datetime | None = None
+    previous_growth: float | None = None
+    found_sample = False
+
+    for item_time, growth in timed_values:
+        if previous_time is not None and previous_growth is not None:
+            segment_start = max(previous_time, since)
+            segment_end = min(item_time, now)
+            if segment_end > segment_start:
+                total += previous_growth * (
+                    segment_end - segment_start
+                ).total_seconds() / 86400
+                found_sample = True
+
+        previous_time = item_time
+        previous_growth = growth
+
+    if previous_time is not None and previous_growth is not None:
+        segment_start = max(previous_time, since)
+        if now > segment_start:
+            total += previous_growth * (now - segment_start).total_seconds() / 86400
+            found_sample = True
+
+    return round(total, 1) if found_sample else 0.0
+
+
+def _first_known_float(*values: float | None) -> float | None:
+    """Return the first known numeric value."""
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
+def _robot_catch_up_text(language: str) -> str:
+    """Return localized robot mower catch-up text."""
+    if language.lower().startswith("da"):
+        return "Robotklipning tillades som indhentning, fordi den teoretiske græshøjde er blevet for høj."
+
+    return "Robot mowing is allowed as catch-up because the estimated grass height is getting too high."
 
 
 def _rain_total_since(items: list[dict[str, Any]], since: datetime) -> float | None:

@@ -31,6 +31,7 @@ from .const import (
     CONF_MOWING_UPDATE_FREQUENCY,
     CONF_RAIN_SENSOR,
     CONF_ROBOT_MOWER_ALLOW_NIGHT,
+    CONF_ROBOT_MOWER_ENTITY,
     CONF_ROBOTIC_MOWER,
     CONF_SHADE_LEVEL,
     CONF_SOIL_MOISTURE_SENSOR,
@@ -98,6 +99,12 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 CONF_ROBOTIC_MOWER,
                 default=defaults.get(CONF_ROBOTIC_MOWER, False),
             ): selector.BooleanSelector(),
+            vol.Optional(
+                CONF_ROBOT_MOWER_ENTITY,
+                **_default_kwargs(defaults, CONF_ROBOT_MOWER_ENTITY),
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="lawn_mower")
+            ),
             vol.Required(
                 CONF_ROBOT_MOWER_ALLOW_NIGHT,
                 default=defaults.get(CONF_ROBOT_MOWER_ALLOW_NIGHT, True),

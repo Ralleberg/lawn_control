@@ -14,6 +14,7 @@
           "soil_moisture_sensor": "Soil moisture sensor",
           "lawn_type": "Lawn type",
           "robotic_mower": "Robotic mower",
+          "robot_mower_entity": "Robotic mower entity",
           "robot_mower_allow_night": "Allow mowing at night",
           "mowing_update_frequency": "Mowing recommendation update frequency",
           "daily_update_hour": "Daily mowing assessment hour",
@@ -35,6 +36,7 @@
         },
         "data_description": {
           "rain_sensor": "Choose a sensor that shows total rain today so far, not current rain or rain per hour.",
+          "robot_mower_entity": "Optional lawn_mower entity used to detect when the robot last mowed.",
           "robot_mower_allow_night": "When disabled, mowing will not be recommended between sunset and sunrise.",
           "mowing_update_frequency": "Choose how long each mowing recommendation should stay in effect.",
           "daily_update_hour": "Earliest hour mowing can be recommended when night mowing is disabled. Also used as the daily update time when frequency is once per day. Choose 0-23, for example 8 for 08:00.",
@@ -71,6 +73,7 @@
           "soil_moisture_sensor": "Soil moisture sensor",
           "lawn_type": "Lawn type",
           "robotic_mower": "Robotic mower",
+          "robot_mower_entity": "Robotic mower entity",
           "robot_mower_allow_night": "Allow mowing at night",
           "mowing_update_frequency": "Mowing recommendation update frequency",
           "daily_update_hour": "Daily mowing assessment hour",
@@ -92,6 +95,7 @@
         },
         "data_description": {
           "rain_sensor": "Choose a sensor that shows total rain today so far, not current rain or rain per hour.",
+          "robot_mower_entity": "Optional lawn_mower entity used to detect when the robot last mowed.",
           "robot_mower_allow_night": "When disabled, mowing will not be recommended between sunset and sunrise.",
           "mowing_update_frequency": "Choose how long each mowing recommendation should stay in effect.",
           "daily_update_hour": "Earliest hour mowing can be recommended when night mowing is disabled. Also used as the daily update time when frequency is once per day. Choose 0-23, for example 8 for 08:00.",

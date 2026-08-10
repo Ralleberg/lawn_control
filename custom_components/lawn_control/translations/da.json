@@ -14,6 +14,7 @@
           "soil_moisture_sensor": "Jordfugtighedssensor",
           "lawn_type": "Plænetype",
           "robotic_mower": "Robotplæneklipper",
+          "robot_mower_entity": "Robotplæneklipper-entity",
           "robot_mower_allow_night": "Tillad klipning om natten",
           "mowing_update_frequency": "Opdateringsfrekvens for klippeanbefaling",
           "daily_update_hour": "Dagligt klippetidspunkt",
@@ -35,6 +36,7 @@
         },
         "data_description": {
           "rain_sensor": "Vælg en sensor der viser samlet nedbør i dag indtil videre, ikke aktuel regn eller regn pr. time.",
+          "robot_mower_entity": "Valgfri lawn_mower entity der bruges til at registrere hvornår robotten sidst har klippet.",
           "robot_mower_allow_night": "Hvis slået fra, vil klipning ikke blive anbefalet mellem solnedgang og solopgang.",
           "mowing_update_frequency": "Vælg hvor længe hver klippeanbefaling skal gælde.",
           "daily_update_hour": "Tidligste time hvor klipning kan anbefales, når natklipning er slået fra. Bruges også som daglig opdateringstid ved daglig frekvens. Vælg 0-23, for eksempel 8 for kl. 08:00.",
@@ -71,6 +73,7 @@
           "soil_moisture_sensor": "Jordfugtighedssensor",
           "lawn_type": "Plænetype",
           "robotic_mower": "Robotplæneklipper",
+          "robot_mower_entity": "Robotplæneklipper-entity",
           "robot_mower_allow_night": "Tillad klipning om natten",
           "mowing_update_frequency": "Opdateringsfrekvens for klippeanbefaling",
           "daily_update_hour": "Dagligt klippetidspunkt",
@@ -92,6 +95,7 @@
         },
         "data_description": {
           "rain_sensor": "Vælg en sensor der viser samlet nedbør i dag indtil videre, ikke aktuel regn eller regn pr. time.",
+          "robot_mower_entity": "Valgfri lawn_mower entity der bruges til at registrere hvornår robotten sidst har klippet.",
           "robot_mower_allow_night": "Hvis slået fra, vil klipning ikke blive anbefalet mellem solnedgang og solopgang.",
           "mowing_update_frequency": "Vælg hvor længe hver klippeanbefaling skal gælde.",
           "daily_update_hour": "Tidligste time hvor klipning kan anbefales, når natklipning er slået fra. Bruges også som daglig opdateringstid ved daglig frekvens. Vælg 0-23, for eksempel 8 for kl. 08:00.",
