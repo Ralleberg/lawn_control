@@ -366,6 +366,15 @@
           "forecast_rain": {
             "name": "Forecast-regn"
           },
+          "last_registered_run": {
+            "name": "Sidste registrerede tur"
+          },
+          "estimated_grass_height": {
+            "name": "Estimeret græshøjde"
+          },
+          "catch_up": {
+            "name": "Catch-up"
+          },
           "reason": {
             "name": "Årsag"
           }

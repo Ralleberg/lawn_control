@@ -366,6 +366,15 @@
           "forecast_rain": {
             "name": "Forecast rain"
           },
+          "last_registered_run": {
+            "name": "Last registered run"
+          },
+          "estimated_grass_height": {
+            "name": "Estimated grass height"
+          },
+          "catch_up": {
+            "name": "Catch-up"
+          },
           "reason": {
             "name": "Reason"
           }

@@ -169,7 +169,14 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         advice["availability"] = _availability_data(weather_data)
         mower_saved = self._update_robot_mower_tracking(advice)
         growth_saved = self._update_growth_history(advice)
-        self._apply_robot_mower_catch_up(advice, weather_data, language)
+        mower_status = self._robot_mower_status_data(advice)
+        self._apply_robot_mower_status_attributes(advice, mower_status)
+        self._apply_robot_mower_catch_up(
+            advice,
+            weather_data,
+            language,
+            mower_status,
+        )
         advice, should_save = self._apply_mowing_frequency_lock(advice)
         self._apply_mowing_time_window(advice, weather_data, language)
         self._refresh_care_recommendation(advice, language)
@@ -262,6 +269,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         advice: dict[str, Any],
         weather_data: LawnWeatherData,
         language: str,
+        mower_status: dict[str, Any],
     ) -> None:
         """Allow occasional robot catch-up mowing when grass is getting too high."""
         if not self.config.get(CONF_ROBOTIC_MOWER):
@@ -279,37 +287,65 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         now = dt_util.now()
-        tracker = self._stored_data.get("robot_mower")
-        if not isinstance(tracker, dict):
-            return
-
-        last_mowed_at = _parse_datetime(tracker.get("last_mowed_at"))
-        last_mowed_height = _as_float(tracker.get("last_mowed_height"))
         target_height = _as_float(advice["recommended_grass_height"]["value"])
+        last_mowed_at = _parse_datetime(mower_status.get("last_registered_run"))
+        estimated_height = _as_float(mower_status.get("estimated_grass_height"))
         if (
             last_mowed_at is None
-            or last_mowed_height is None
             or target_height is None
+            or estimated_height is None
             or now - last_mowed_at < ROBOT_CATCH_UP_COOLDOWN
         ):
             return
 
-        growth_since_mowed = _growth_total_since(
-            self._stored_data.get("growth_history", []),
-            last_mowed_at,
-            now,
-        )
-        if growth_since_mowed is None:
-            return
-
-        estimated_height = last_mowed_height + growth_since_mowed
         if estimated_height < target_height + ROBOT_CATCH_UP_TRIGGER_MM:
             return
 
         attributes = robot_advice.setdefault("attributes", {})
         attributes["blocking_factors"] = []
+        attributes["catch_up"] = True
         attributes["reason"] = _robot_catch_up_text(language)
         robot_advice["value"] = True
+
+    def _robot_mower_status_data(self, advice: dict[str, Any]) -> dict[str, Any]:
+        """Return tracked robot mower data for entity attributes and catch-up."""
+        status: dict[str, Any] = {"catch_up": False}
+        tracker = self._stored_data.get("robot_mower")
+        if not isinstance(tracker, dict):
+            return status
+
+        last_mowed_at = _parse_datetime(tracker.get("last_mowed_at"))
+        last_mowed_height = _as_float(tracker.get("last_mowed_height"))
+        if last_mowed_at is None or last_mowed_height is None:
+            return status
+
+        status["last_registered_run"] = last_mowed_at.isoformat()
+        growth_since_mowed = _growth_total_since(
+            self._stored_data.get("growth_history", []),
+            last_mowed_at,
+            dt_util.now(),
+        )
+        if growth_since_mowed is not None:
+            status["estimated_grass_height"] = round(
+                last_mowed_height + growth_since_mowed,
+                1,
+            )
+
+        return status
+
+    def _apply_robot_mower_status_attributes(
+        self,
+        advice: dict[str, Any],
+        mower_status: dict[str, Any],
+    ) -> None:
+        """Expose concise robot mower tracking details on robot mower advice."""
+        attributes = advice["robot_mower_should_run"].setdefault("attributes", {})
+        attributes["catch_up"] = bool(mower_status.get("catch_up", False))
+
+        for key in ("last_registered_run", "estimated_grass_height"):
+            value = mower_status.get(key)
+            if value is not None:
+                attributes[key] = value
 
     def _robot_catch_up_hard_blocked(
         self,
@@ -479,6 +515,8 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         attributes["mowing_time_window_open"] = False
         attributes["mowing_allowed_from_hour"] = daily_hour
         attributes["reason"] = " ".join(blocking_factors)
+        if "catch_up" in attributes:
+            attributes["catch_up"] = False
         mowing_advice["value"] = value
 
     def _mark_mowing_time_window_open(
