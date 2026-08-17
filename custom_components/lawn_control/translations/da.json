@@ -28,11 +28,7 @@
           "min_grass_height": "Minimum græshøjde",
           "max_grass_height": "Maksimum græshøjde",
           "water_during_drought": "Vander i tørre perioder",
-          "watering_level": "Vandingsniveau",
-          "fertilizer_n_percent": "Kvælstof i gødning",
-          "fertilizer_p_percent": "Fosfor i gødning",
-          "fertilizer_k_percent": "Kalium i gødning",
-          "last_fertilized_date": "Seneste gødningsdato"
+          "watering_level": "Vandingsniveau"
         },
         "data_description": {
           "rain_sensor": "Vælg en sensor der viser samlet nedbør i dag indtil videre, ikke aktuel regn eller regn pr. time.",
@@ -43,15 +39,13 @@
           "historical_rain_threshold": "Mindste historiske regnmængde der alene kan tælle som nok fugt. Kan vælges fra 5 til 15 mm.",
           "forecast_rain_threshold": "Mindste forventede regnmængde der alene kan tælle som nok kommende fugt. Kan vælges fra 10 til 25 mm.",
           "historical_rain_days": "Antal dage bagud der bruges til historisk regn. Kan vælges fra 3 til 10 dage.",
-          "forecast_rain_days": "Antal dage frem der bruges til forecast-regn. Kan vælges fra 2 til 7 dage.",
-          "last_fertilized_date": "Indtast datoen hvor du sidst gødede i formatet YYYY-MM-DD, for eksempel 2026-05-20."
+          "forecast_rain_days": "Antal dage frem der bruges til forecast-regn. Kan vælges fra 2 til 7 dage."
         }
       }
     },
     "error": {
       "height_range": "Minimum græshøjde skal være lavere end maksimum græshøjde.",
       "invalid_hour": "Tidspunktet skal være en hel time fra 0 til 23.",
-      "invalid_date": "Datoen skal skrives i formatet YYYY-MM-DD, for eksempel 2026-05-20.",
       "invalid_mowing_update_frequency": "Vælg en gyldig opdateringsfrekvens for klippeanbefalingen.",
       "invalid_rain_setting": "Regnindstillingen er uden for det tilladte interval."
     },
@@ -87,11 +81,7 @@
           "min_grass_height": "Minimum græshøjde",
           "max_grass_height": "Maksimum græshøjde",
           "water_during_drought": "Vander i tørre perioder",
-          "watering_level": "Vandingsniveau",
-          "fertilizer_n_percent": "Kvælstof i gødning",
-          "fertilizer_p_percent": "Fosfor i gødning",
-          "fertilizer_k_percent": "Kalium i gødning",
-          "last_fertilized_date": "Seneste gødningsdato"
+          "watering_level": "Vandingsniveau"
         },
         "data_description": {
           "rain_sensor": "Vælg en sensor der viser samlet nedbør i dag indtil videre, ikke aktuel regn eller regn pr. time.",
@@ -102,15 +92,13 @@
           "historical_rain_threshold": "Mindste historiske regnmængde der alene kan tælle som nok fugt. Kan vælges fra 5 til 15 mm.",
           "forecast_rain_threshold": "Mindste forventede regnmængde der alene kan tælle som nok kommende fugt. Kan vælges fra 10 til 25 mm.",
           "historical_rain_days": "Antal dage bagud der bruges til historisk regn. Kan vælges fra 3 til 10 dage.",
-          "forecast_rain_days": "Antal dage frem der bruges til forecast-regn. Kan vælges fra 2 til 7 dage.",
-          "last_fertilized_date": "Indtast datoen hvor du sidst gødede i formatet YYYY-MM-DD, for eksempel 2026-05-20."
+          "forecast_rain_days": "Antal dage frem der bruges til forecast-regn. Kan vælges fra 2 til 7 dage."
         }
       }
     },
     "error": {
       "height_range": "Minimum græshøjde skal være lavere end maksimum græshøjde.",
       "invalid_hour": "Tidspunktet skal være en hel time fra 0 til 23.",
-      "invalid_date": "Datoen skal skrives i formatet YYYY-MM-DD, for eksempel 2026-05-20.",
       "invalid_mowing_update_frequency": "Vælg en gyldig opdateringsfrekvens for klippeanbefalingen.",
       "invalid_rain_setting": "Regnindstillingen er uden for det tilladte interval."
     }
@@ -172,6 +160,22 @@
     }
   },
   "entity": {
+    "date": {
+      "last_fertilized_date": {
+        "name": "Seneste gødningsdato"
+      }
+    },
+    "number": {
+      "fertilizer_n_percent": {
+        "name": "Kvælstof i gødning"
+      },
+      "fertilizer_p_percent": {
+        "name": "Fosfor i gødning"
+      },
+      "fertilizer_k_percent": {
+        "name": "Kalium i gødning"
+      }
+    },
     "sensor": {
       "recommended_grass_height": {
         "name": "Anbefalet græshøjde",

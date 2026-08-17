@@ -118,16 +118,16 @@ time of day where mowing can be recommended as `true`.
 
 Optional fertilizer configuration:
 
-- Nitrogen (N)
-- Phosphorus (P)
-- Potassium (K)
-- Application date (`YYYY-MM-DD`)
+The fertilizer NPK percentages are managed through dedicated Home Assistant
+number entities after setup:
 
-Example:
+- `number.lawn_fertilizer_n_percent`
+- `number.lawn_fertilizer_p_percent`
+- `number.lawn_fertilizer_k_percent`
 
-```text
-2026-05-20
-```
+The latest fertilizer date is managed through the `date.lawn_last_fertilized_date`
+entity after setup. Update these entities directly from Home Assistant whenever
+fertilizer is applied or the fertilizer composition changes.
 
 ---
 
@@ -143,6 +143,10 @@ Example:
 | `sensor.lawn_forecast_rain` | Forecast rainfall used by the rule engine. |
 | `sensor.lawn_combined_rain` | Combined rainfall used for moisture calculations. |
 | `sensor.lawn_care_recommendation` | Human-readable lawn care summary. |
+| `date.lawn_last_fertilized_date` | Latest fertilizer application date used by fertilizer and growth calculations. |
+| `number.lawn_fertilizer_n_percent` | Nitrogen percentage used by fertilizer and growth calculations. |
+| `number.lawn_fertilizer_p_percent` | Phosphorus percentage used by fertilizer and growth calculations. |
+| `number.lawn_fertilizer_k_percent` | Potassium percentage used by fertilizer and growth calculations. |
 | `binary_sensor.lawn_good_day_for_fertilizer` | Indicates whether fertilizing is recommended. |
 | `binary_sensor.lawn_should_mow` | Mowing recommendation for the configured update frequency. Not created when robotic mower support is enabled. |
 | `binary_sensor.lawn_robot_mower_should_run` | Indicates whether a robot mower should be allowed to operate. |

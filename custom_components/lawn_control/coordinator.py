@@ -6,7 +6,7 @@ import logging
 import math
 from copy import deepcopy
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -40,6 +40,7 @@ from .const import (
     DEFAULT_MOWING_UPDATE_FREQUENCY,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    FERTILIZER_PERCENT_CONFIGS,
     MOWING_UPDATE_FREQUENCIES,
 )
 from .rules.care import build_advice, general_recommendation
@@ -101,6 +102,8 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def async_start(self) -> None:
         """Load stored snapshots and set up scheduled refreshes."""
         self._stored_data = await self._store.async_load() or {}
+        if self._migrate_editable_settings():
+            await self._store.async_save(self._stored_data)
         self._unsub_refresh_times = [
             async_track_time_change(
                 self.hass,
@@ -152,12 +155,112 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def config(self) -> dict[str, Any]:
         """Return merged config entry data and options."""
         config = {**self.entry.data, **self.entry.options}
+        for key in FERTILIZER_PERCENT_CONFIGS:
+            config[key] = self._fertilizer_percent_value(key, config)
+        last_fertilized_date = self._last_fertilized_date_string(config)
+        if last_fertilized_date is not None:
+            config[CONF_LAST_FERTILIZED_DATE] = last_fertilized_date
         days_since_fertilizer = _days_since_date(
-            config.get(CONF_LAST_FERTILIZED_DATE), dt_util.now()
+            last_fertilized_date, dt_util.now()
         )
         if days_since_fertilizer is not None:
             config[CONF_DAYS_SINCE_FERTILIZER] = days_since_fertilizer
         return config
+
+    @property
+    def last_fertilized_date(self) -> date | None:
+        """Return the latest fertilizer date for the date entity."""
+        value = self._last_fertilized_date_string(
+            {**self.entry.data, **self.entry.options}
+        )
+        if value is None:
+            return None
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+
+    async def async_set_last_fertilized_date(self, value: date) -> None:
+        """Persist a new latest fertilizer date from the date entity."""
+        self._stored_data[CONF_LAST_FERTILIZED_DATE] = value.isoformat()
+        await self._store.async_save(self._stored_data)
+        await self.async_request_refresh()
+
+    def fertilizer_percent(self, key: str) -> float:
+        """Return a fertilizer percentage for a number entity."""
+        return self._fertilizer_percent_value(
+            key, {**self.entry.data, **self.entry.options}
+        )
+
+    async def async_set_fertilizer_percent(self, key: str, value: float) -> None:
+        """Persist a fertilizer percentage from a number entity."""
+        percent = _coerce_fertilizer_percent(value)
+        if percent is None:
+            raise ValueError(f"Invalid fertilizer percentage: {value}")
+
+        self._stored_data[key] = percent
+        await self._store.async_save(self._stored_data)
+        await self.async_request_refresh()
+
+    def _last_fertilized_date_string(self, config: dict[str, Any]) -> str | None:
+        """Return stored fertilizer date, falling back to legacy config values."""
+        stored_value = self._stored_data.get(CONF_LAST_FERTILIZED_DATE)
+        if _is_valid_date(stored_value):
+            return str(stored_value)
+
+        config_value = config.get(CONF_LAST_FERTILIZED_DATE)
+        if _is_valid_date(config_value):
+            return str(config_value)
+
+        return None
+
+    def _migrate_last_fertilized_date(self) -> bool:
+        """Copy legacy config/options fertilizer date into editable storage."""
+        stored_value = self._stored_data.get(CONF_LAST_FERTILIZED_DATE)
+        if _is_valid_date(stored_value):
+            return False
+
+        config = {**self.entry.data, **self.entry.options}
+        config_value = config.get(CONF_LAST_FERTILIZED_DATE)
+        if not _is_valid_date(config_value):
+            return False
+
+        self._stored_data[CONF_LAST_FERTILIZED_DATE] = str(config_value)
+        return True
+
+    def _migrate_fertilizer_percentages(self) -> bool:
+        """Copy legacy config/options fertilizer percentages into editable storage."""
+        changed = False
+        config = {**self.entry.data, **self.entry.options}
+        for key in FERTILIZER_PERCENT_CONFIGS:
+            if _coerce_fertilizer_percent(self._stored_data.get(key)) is not None:
+                continue
+
+            percent = _coerce_fertilizer_percent(config.get(key))
+            if percent is None:
+                continue
+
+            self._stored_data[key] = percent
+            changed = True
+        return changed
+
+    def _migrate_editable_settings(self) -> bool:
+        """Copy legacy config/options editable fields into integration storage."""
+        date_changed = self._migrate_last_fertilized_date()
+        percentages_changed = self._migrate_fertilizer_percentages()
+        return date_changed or percentages_changed
+
+    def _fertilizer_percent_value(self, key: str, config: dict[str, Any]) -> float:
+        """Return stored fertilizer percentage, falling back to legacy config."""
+        stored_value = _coerce_fertilizer_percent(self._stored_data.get(key))
+        if stored_value is not None:
+            return stored_value
+
+        config_value = _coerce_fertilizer_percent(config.get(key))
+        if config_value is not None:
+            return config_value
+
+        return 0.0
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Update all calculated advice."""
@@ -1096,7 +1199,7 @@ def _rain_increase(
 
 def _days_since_date(value: Any, now: datetime) -> int | None:
     """Return days since a YYYY-MM-DD date."""
-    if not isinstance(value, str) or not value:
+    if not _is_valid_date(value):
         return None
 
     try:
@@ -1105,3 +1208,30 @@ def _days_since_date(value: Any, now: datetime) -> int | None:
         return None
 
     return max(0, (now.date() - fertilized_date).days)
+
+
+def _is_valid_date(value: Any) -> bool:
+    """Return true if value is YYYY-MM-DD."""
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _coerce_fertilizer_percent(value: Any) -> float | None:
+    """Return a valid fertilizer percentage as a float."""
+    if value in (None, "") or isinstance(value, bool):
+        return None
+
+    try:
+        percent = float(value)
+    except (TypeError, ValueError):
+        return None
+
+    if not 0 <= percent <= 40:
+        return None
+
+    return round(round(percent * 2) / 2, 1)

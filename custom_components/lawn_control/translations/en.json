@@ -28,11 +28,7 @@
           "min_grass_height": "Minimum grass height",
           "max_grass_height": "Maximum grass height",
           "water_during_drought": "Water during dry periods",
-          "watering_level": "Watering level",
-          "fertilizer_n_percent": "Fertilizer nitrogen",
-          "fertilizer_p_percent": "Fertilizer phosphorus",
-          "fertilizer_k_percent": "Fertilizer potassium",
-          "last_fertilized_date": "Last fertilized date"
+          "watering_level": "Watering level"
         },
         "data_description": {
           "rain_sensor": "Choose a sensor that shows total rain today so far, not current rain or rain per hour.",
@@ -43,15 +39,13 @@
           "historical_rain_threshold": "Minimum historical rain that can count as enough moisture by itself. Choose 5 to 15 mm.",
           "forecast_rain_threshold": "Minimum forecast rain that can count as enough upcoming moisture by itself. Choose 10 to 25 mm.",
           "historical_rain_days": "Number of past days used for historical rain. Choose 3 to 10 days.",
-          "forecast_rain_days": "Number of future days used for forecast rain. Choose 2 to 7 days.",
-          "last_fertilized_date": "Enter the date you last applied fertilizer in YYYY-MM-DD format, for example 2026-05-20."
+          "forecast_rain_days": "Number of future days used for forecast rain. Choose 2 to 7 days."
         }
       }
     },
     "error": {
       "height_range": "Minimum grass height must be lower than maximum grass height.",
       "invalid_hour": "The time must be a whole hour from 0 to 23.",
-      "invalid_date": "Date must use YYYY-MM-DD format, for example 2026-05-20.",
       "invalid_mowing_update_frequency": "Choose a valid mowing recommendation update frequency.",
       "invalid_rain_setting": "Rain setting is outside the allowed range."
     },
@@ -87,11 +81,7 @@
           "min_grass_height": "Minimum grass height",
           "max_grass_height": "Maximum grass height",
           "water_during_drought": "Water during dry periods",
-          "watering_level": "Watering level",
-          "fertilizer_n_percent": "Fertilizer nitrogen",
-          "fertilizer_p_percent": "Fertilizer phosphorus",
-          "fertilizer_k_percent": "Fertilizer potassium",
-          "last_fertilized_date": "Last fertilized date"
+          "watering_level": "Watering level"
         },
         "data_description": {
           "rain_sensor": "Choose a sensor that shows total rain today so far, not current rain or rain per hour.",
@@ -102,15 +92,13 @@
           "historical_rain_threshold": "Minimum historical rain that can count as enough moisture by itself. Choose 5 to 15 mm.",
           "forecast_rain_threshold": "Minimum forecast rain that can count as enough upcoming moisture by itself. Choose 10 to 25 mm.",
           "historical_rain_days": "Number of past days used for historical rain. Choose 3 to 10 days.",
-          "forecast_rain_days": "Number of future days used for forecast rain. Choose 2 to 7 days.",
-          "last_fertilized_date": "Enter the date you last applied fertilizer in YYYY-MM-DD format, for example 2026-05-20."
+          "forecast_rain_days": "Number of future days used for forecast rain. Choose 2 to 7 days."
         }
       }
     },
     "error": {
       "height_range": "Minimum grass height must be lower than maximum grass height.",
       "invalid_hour": "The time must be a whole hour from 0 to 23.",
-      "invalid_date": "Date must use YYYY-MM-DD format, for example 2026-05-20.",
       "invalid_mowing_update_frequency": "Choose a valid mowing recommendation update frequency.",
       "invalid_rain_setting": "Rain setting is outside the allowed range."
     }
@@ -172,6 +160,22 @@
     }
   },
   "entity": {
+    "date": {
+      "last_fertilized_date": {
+        "name": "Last fertilized date"
+      }
+    },
+    "number": {
+      "fertilizer_n_percent": {
+        "name": "Fertilizer nitrogen"
+      },
+      "fertilizer_p_percent": {
+        "name": "Fertilizer phosphorus"
+      },
+      "fertilizer_k_percent": {
+        "name": "Fertilizer potassium"
+      }
+    },
     "sensor": {
       "recommended_grass_height": {
         "name": "Recommended grass height",

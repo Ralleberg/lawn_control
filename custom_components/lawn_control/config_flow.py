@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import date
 from typing import Any
 
 import voluptuous as vol
@@ -16,16 +15,12 @@ from .const import (
     CARE_LEVELS,
     CONF_CARE_LEVEL,
     CONF_DAILY_UPDATE_HOUR,
-    CONF_FERTILIZER_K_PERCENT,
-    CONF_FERTILIZER_N_PERCENT,
-    CONF_FERTILIZER_P_PERCENT,
     CONF_FORECAST_RAIN_DAYS,
     CONF_FORECAST_RAIN_THRESHOLD,
     CONF_HISTORICAL_RAIN_DAYS,
     CONF_HISTORICAL_RAIN_THRESHOLD,
     CONF_HUMIDITY_SENSOR,
     CONF_LAWN_TYPE,
-    CONF_LAST_FERTILIZED_DATE,
     CONF_MAX_GRASS_HEIGHT,
     CONF_MIN_GRASS_HEIGHT,
     CONF_MOWING_UPDATE_FREQUENCY,
@@ -257,34 +252,6 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                     translation_key=CONF_WATERING_LEVEL,
                 )
             ),
-            vol.Optional(
-                CONF_FERTILIZER_N_PERCENT,
-                default=defaults.get(CONF_FERTILIZER_N_PERCENT, 0),
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=0, max=40, step=0.5, unit_of_measurement="%"
-                )
-            ),
-            vol.Optional(
-                CONF_FERTILIZER_P_PERCENT,
-                default=defaults.get(CONF_FERTILIZER_P_PERCENT, 0),
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=0, max=40, step=0.5, unit_of_measurement="%"
-                )
-            ),
-            vol.Optional(
-                CONF_FERTILIZER_K_PERCENT,
-                default=defaults.get(CONF_FERTILIZER_K_PERCENT, 0),
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=0, max=40, step=0.5, unit_of_measurement="%"
-                )
-            ),
-            vol.Optional(
-                CONF_LAST_FERTILIZED_DATE,
-                **_default_kwargs(defaults, CONF_LAST_FERTILIZED_DATE),
-            ): str,
         }
     )
 
@@ -321,19 +288,7 @@ def _clean_user_input(user_input: dict[str, Any]) -> dict[str, Any]:
     cleaned.setdefault(CONF_FORECAST_RAIN_DAYS, DEFAULT_FORECAST_RAIN_DAYS)
     cleaned.setdefault(CONF_WATER_DURING_DROUGHT, False)
     cleaned.setdefault(CONF_WATERING_LEVEL, "normal")
-    cleaned.setdefault(CONF_FERTILIZER_N_PERCENT, 0)
-    cleaned.setdefault(CONF_FERTILIZER_P_PERCENT, 0)
-    cleaned.setdefault(CONF_FERTILIZER_K_PERCENT, 0)
     return cleaned
-
-
-def _is_valid_date(value: str) -> bool:
-    """Return true if value is YYYY-MM-DD."""
-    try:
-        date.fromisoformat(value)
-    except ValueError:
-        return False
-    return True
 
 
 def _is_whole_number_in_range(value: Any, minimum: int, maximum: int) -> bool:
@@ -390,10 +345,6 @@ class LawnControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_MOWING_UPDATE_FREQUENCY] = "invalid_mowing_update_frequency"
             elif not _is_valid_hour(user_input.get(CONF_DAILY_UPDATE_HOUR)):
                 errors[CONF_DAILY_UPDATE_HOUR] = "invalid_hour"
-            elif user_input.get(CONF_LAST_FERTILIZED_DATE) and not _is_valid_date(
-                user_input[CONF_LAST_FERTILIZED_DATE]
-            ):
-                errors[CONF_LAST_FERTILIZED_DATE] = "invalid_date"
             elif not errors:
                 return self.async_create_entry(
                     title=user_input[CONF_NAME],
@@ -440,10 +391,6 @@ class LawnControlOptionsFlow(config_entries.OptionsFlow):
                 errors[CONF_MOWING_UPDATE_FREQUENCY] = "invalid_mowing_update_frequency"
             elif not _is_valid_hour(user_input.get(CONF_DAILY_UPDATE_HOUR)):
                 errors[CONF_DAILY_UPDATE_HOUR] = "invalid_hour"
-            elif user_input.get(CONF_LAST_FERTILIZED_DATE) and not _is_valid_date(
-                user_input[CONF_LAST_FERTILIZED_DATE]
-            ):
-                errors[CONF_LAST_FERTILIZED_DATE] = "invalid_date"
             elif not errors:
                 return self.async_create_entry(title="", data=user_input)
 
