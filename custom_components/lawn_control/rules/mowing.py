@@ -453,8 +453,12 @@ def _fertilizer_days_attributes(config: dict[str, Any]) -> dict[str, Any]:
 
 def _float_config(config: dict[str, Any], key: str, default: float = 0.0) -> float:
     """Read a numeric config value."""
+    value = config.get(key, default)
+    if value in (None, ""):
+        return default
+
     try:
-        return float(config.get(key, default) or default)
+        return float(value)
     except (TypeError, ValueError):
         return default
 

@@ -65,8 +65,11 @@ def calculate_fertilizer_score(
 
 
 def _fertilizer_residual_score(config: dict[str, Any]) -> int:
-    """Estimate remaining fertilizer effect from age and NPK strength."""
-    return round(100 * _fertilizer_strength(config) * _fertilizer_age_factor(config))
+    """Estimate remaining fertilizer effect from age."""
+    if _float_config(config, CONF_FERTILIZER_N_PERCENT) <= 0:
+        return 0
+
+    return round(100 * _fertilizer_age_factor(config))
 
 
 def _fertilizer_age_factor(config: dict[str, Any]) -> float:
@@ -97,8 +100,12 @@ def _fertilizer_strength(config: dict[str, Any]) -> float:
 
 def _float_config(config: dict[str, Any], key: str, default: float = 0.0) -> float:
     """Read a numeric config value."""
+    value = config.get(key, default)
+    if value in (None, ""):
+        return default
+
     try:
-        return float(config.get(key, default) or default)
+        return float(value)
     except (TypeError, ValueError):
         return default
 
@@ -116,8 +123,8 @@ def _texts(language: str) -> dict[str, str]:
             "rain_block": "Gødning kræver fugtig jord, vanding i tørre perioder eller nok historisk og forecast-regn efter de valgte grænser.",
             "heat_block": "Høj temperatur øger risikoen for svidning.",
             "sandy_soil": "sandet jord egner sig bedre til lettere doseringer",
-            "reason": "Gødningsscore er {score} baseret på gødningsalder og NPK-styrke.",
-            "score_basis": "Score beregnes kun fra NPK og dage siden seneste gødning.",
+            "reason": "Gødningsscore er {score} baseret på dage siden seneste gødning.",
+            "score_basis": "Score beregnes fra dage siden seneste gødning, når gødningen indeholder kvælstof.",
             "stopped": "stoppet",
             "slow": "langsom",
             "normal": "normal",
@@ -134,8 +141,8 @@ def _texts(language: str) -> dict[str, str]:
         "rain_block": "Fertilizer requires moist soil, watering during dry periods or enough historical and forecast rain for the configured thresholds.",
         "heat_block": "High temperature increases scorch risk.",
         "sandy_soil": "sandy soil favors lighter applications",
-        "reason": "Fertilizer score is {score} from fertilizer age and NPK strength.",
-        "score_basis": "Score is calculated only from NPK and days since last fertilizer.",
+        "reason": "Fertilizer score is {score} from days since last fertilizer.",
+        "score_basis": "Score is calculated from days since last fertilizer when the fertilizer contains nitrogen.",
         "stopped": "stopped",
         "slow": "slow",
         "normal": "normal",

@@ -213,9 +213,13 @@ Growth depends on:
 
 ## Fertilizer
 
-The fertilizer model estimates the remaining fertilizer effect using:
+The fertilizer score estimates remaining fertilizer age effect using:
 
 - Fertilizer age
+- Whether the configured fertilizer contains nitrogen
+
+Fertilizer-driven growth bonus also considers:
+
 - NPK composition
 - Nitrogen strength
 - Moisture availability

@@ -97,8 +97,12 @@ def _rain_value(value: float | None) -> float:
 
 def _float_config(config: dict[str, Any], key: str, default: float) -> float:
     """Read a numeric config value."""
+    value = config.get(key, default)
+    if value in (None, ""):
+        return default
+
     try:
-        return float(config.get(key, default) or default)
+        return float(value)
     except (TypeError, ValueError):
         return default
 
