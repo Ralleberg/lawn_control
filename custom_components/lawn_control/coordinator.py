@@ -73,10 +73,13 @@ class LawnWeatherData:
     soil_moisture: float | None
     forecast_rain: float | None
     forecast_rain_5_days: float | None
+    forecast_rain_next_24h: float | None
+    forecast_drying_pressure_72h: float | None
     forecast_condition: str | None
     historical_temperature: float | None
     historical_humidity: float | None
     historical_rain: float | None
+    historical_rain_24h: float | None
     sun_is_up: bool | None
     unavailable_required_entities: tuple[str, ...]
     unavailable_optional_entities: tuple[str, ...]
@@ -668,6 +671,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> LawnWeatherData:
         """Read weather and optional sensor states from Home Assistant."""
         config = self.config
+        now = dt_util.now()
         unavailable_required_entities: list[str] = []
         unavailable_optional_entities: list[str] = []
         weather_state = self.hass.states.get(config[CONF_WEATHER_ENTITY])
@@ -694,6 +698,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         legacy_forecast = weather_attrs.get("forecast") or []
         short_forecast = hourly_forecast or daily_forecast or legacy_forecast
         rain_forecast = daily_forecast or hourly_forecast or legacy_forecast
+        drying_forecast = daily_forecast or hourly_forecast or legacy_forecast
         first_forecast = short_forecast[0] if short_forecast else {}
 
         temperature = self._read_float_sensor(
@@ -732,10 +737,21 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     DEFAULT_FORECAST_RAIN_DAYS,
                 ),
             ),
+            forecast_rain_next_24h=_forecast_precipitation_next_hours(
+                short_forecast,
+                24,
+                now,
+            ),
+            forecast_drying_pressure_72h=_forecast_drying_pressure(
+                drying_forecast,
+                72,
+                now,
+            ),
             forecast_condition=first_forecast.get("condition"),
             historical_temperature=None,
             historical_humidity=None,
             historical_rain=None,
+            historical_rain_24h=None,
             sun_is_up=_sun_is_up(sun_state.state if sun_state else None),
             unavailable_required_entities=tuple(
                 dict.fromkeys(unavailable_required_entities)
@@ -743,7 +759,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             unavailable_optional_entities=tuple(
                 dict.fromkeys(unavailable_optional_entities)
             ),
-            month=datetime.now().month,
+            month=now.month,
         )
 
     def _read_float_sensor(
@@ -844,6 +860,10 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 historical_rain=_rain_total_since(
                     history,
                     now - timedelta(hours=history_days * 24),
+                ),
+                historical_rain_24h=_rain_total_since(
+                    history,
+                    now - timedelta(hours=24),
                 ),
                 recent_hour_rain=_rain_total_since(history, now - timedelta(hours=1)),
             ),
@@ -1024,6 +1044,180 @@ def _sum_forecast_rain(
             found = True
 
     return round(total, 1) if found else None
+
+
+def _forecast_drying_pressure(
+    forecast: list[dict[str, Any]], hours: int, now: datetime
+) -> float | None:
+    """Return forecast drying pressure measured as sunny-day equivalents."""
+    if not forecast:
+        return None
+
+    interval_hours = _forecast_interval_hours(forecast)
+    total = 0.0
+    found = False
+
+    for item, overlap_hours in _forecast_periods(
+        forecast,
+        hours,
+        now,
+        interval_hours,
+    ):
+        condition = item.get("condition")
+        temperature = _as_float(item.get("temperature"))
+        humidity = _as_float(item.get("humidity"))
+        rain = _probability_weighted_rain(item)
+        if condition is None and temperature is None and rain is None:
+            continue
+
+        condition_factor = _drying_condition_factor(condition)
+        temperature_factor = _drying_temperature_factor(temperature)
+        humidity_factor = _drying_humidity_factor(humidity)
+        rain_factor = _drying_rain_factor(rain, interval_hours)
+        total += (
+            condition_factor
+            * temperature_factor
+            * humidity_factor
+            * rain_factor
+            * overlap_hours
+            / 24
+        )
+        found = True
+
+    return round(total, 2) if found else None
+
+
+def _forecast_precipitation_next_hours(
+    forecast: list[dict[str, Any]], hours: int, now: datetime
+) -> float | None:
+    """Return probability-weighted rain from periods overlapping the horizon."""
+    if not forecast:
+        return None
+
+    interval_hours = _forecast_interval_hours(forecast)
+    total = 0.0
+    found = False
+    for item, _overlap_hours in _forecast_periods(
+        forecast,
+        hours,
+        now,
+        interval_hours,
+    ):
+        rain = _probability_weighted_rain(item)
+        if rain is not None:
+            total += rain
+            found = True
+
+    return round(total, 1) if found else None
+
+
+def _forecast_periods(
+    forecast: list[dict[str, Any]],
+    hours: int,
+    now: datetime,
+    interval_hours: float,
+) -> list[tuple[dict[str, Any], float]]:
+    """Return forecast items and their overlap with a future time horizon."""
+    horizon_end = now + timedelta(hours=hours)
+    periods: list[tuple[dict[str, Any], float]] = []
+
+    for index, item in enumerate(forecast):
+        period_start = _parse_datetime(item.get("datetime"))
+        if period_start is None:
+            period_start = now + timedelta(hours=index * interval_hours)
+        period_end = period_start + timedelta(hours=interval_hours)
+
+        try:
+            overlap_start = max(now, period_start)
+            overlap_end = min(horizon_end, period_end)
+        except TypeError:
+            period_start = now + timedelta(hours=index * interval_hours)
+            period_end = period_start + timedelta(hours=interval_hours)
+            overlap_start = period_start
+            overlap_end = min(horizon_end, period_end)
+
+        if overlap_end <= overlap_start:
+            continue
+        overlap_hours = (overlap_end - overlap_start).total_seconds() / 3600
+        periods.append((item, overlap_hours))
+
+    return periods
+
+
+def _forecast_interval_hours(forecast: list[dict[str, Any]]) -> float:
+    """Return the approximate number of hours represented by each forecast item."""
+    if len(forecast) > 1:
+        first = _parse_datetime(forecast[0].get("datetime"))
+        second = _parse_datetime(forecast[1].get("datetime"))
+        if first is not None and second is not None:
+            hours = abs((second - first).total_seconds()) / 3600
+            if hours > 0:
+                return min(24.0, hours)
+    return 1.0 if len(forecast) > 8 else 24.0
+
+
+def _probability_weighted_rain(item: dict[str, Any]) -> float | None:
+    """Return expected rain after precipitation probability is considered."""
+    rain = _as_float(item.get("precipitation"))
+    if rain is None:
+        return None
+
+    probability = _as_float(item.get("precipitation_probability"))
+    if probability is None:
+        return rain
+    return rain * max(0.0, min(100.0, probability)) / 100
+
+
+def _drying_condition_factor(condition: Any) -> float:
+    """Return relative drying strength for a weather condition."""
+    if condition == "sunny":
+        return 1.0
+    if condition == "partlycloudy":
+        return 0.65
+    if condition in ("cloudy", "fog"):
+        return 0.2
+    if condition == "clear-night":
+        return 0.05
+    if condition in ("rainy", "pouring", "lightning-rainy", "snowy", "hail"):
+        return 0.0
+    return 0.35
+
+
+def _drying_temperature_factor(temperature: float | None) -> float:
+    """Return relative drying strength for forecast temperature."""
+    if temperature is None:
+        return 1.0
+    if temperature >= 28:
+        return 1.45
+    if temperature >= 24:
+        return 1.2
+    if temperature >= 18:
+        return 1.0
+    if temperature >= 12:
+        return 0.7
+    return 0.4
+
+
+def _drying_humidity_factor(humidity: float | None) -> float:
+    """Return relative drying strength for forecast humidity."""
+    if humidity is None:
+        return 1.0
+    if humidity < 40:
+        return 1.2
+    if humidity >= 75:
+        return 0.7
+    return 1.0
+
+
+def _drying_rain_factor(rain: float | None, interval_hours: float) -> float:
+    """Reduce drying pressure when meaningful rain is expected in the period."""
+    if rain is None or rain <= 0:
+        return 1.0
+
+    meaningful_rain = 0.5 if interval_hours <= 2 else 5.0
+    if rain >= meaningful_rain:
+        return 0.1
+    return 0.4
 
 
 def _forecast_window_size(forecast: list[dict[str, Any]], days: int) -> int:

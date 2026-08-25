@@ -189,8 +189,17 @@
           "historical_rain": {
             "name": "Historisk regn"
           },
+          "recent_rain_24h": {
+            "name": "Regn seneste 24 timer"
+          },
           "forecast_rain": {
             "name": "Forecast-regn"
+          },
+          "forecast_rain_next_24h": {
+            "name": "Forventet regn næste 24 timer"
+          },
+          "forecast_drying_pressure_72h": {
+            "name": "Tørrepåvirkning næste 72 timer"
           },
           "rain_total": {
             "name": "Samlet regn"

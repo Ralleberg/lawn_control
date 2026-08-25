@@ -10,13 +10,18 @@ from ..const import (
     CONF_MIN_GRASS_HEIGHT,
     CONF_ROBOTIC_MOWER,
     CONF_SHADE_LEVEL,
+    CONF_WATER_DURING_DROUGHT,
     DEFAULT_MAX_GRASS_HEIGHT,
     DEFAULT_MIN_GRASS_HEIGHT,
 )
 from .drought import calculate_drought_risk
 from .fertilizer import calculate_fertilizer_score
 from .maintenance import calculate_verticut_advice
-from .moisture import rain_moisture_threshold, rain_moisture_total
+from .moisture import (
+    historical_rain_threshold,
+    rain_moisture_threshold,
+    rain_moisture_total,
+)
 from .mowing import (
     calculate_growth_rate,
     calculate_mowing_advice,
@@ -25,6 +30,9 @@ from .mowing import (
 
 if TYPE_CHECKING:
     from ..coordinator import LawnWeatherData
+
+MODERATE_FORECAST_DRYING_PRESSURE = 0.75
+HIGH_FORECAST_DRYING_PRESSURE = 1.5
 
 
 def build_advice(
@@ -135,17 +143,74 @@ def recommended_grass_height(
         target = min_height
         reasons.append(text["good_rain_height"])
 
+    target = _apply_forecast_height_protection(
+        config,
+        weather,
+        target,
+        min_height,
+        max_height,
+        reasons,
+        text,
+    )
+
     return {
         "value": target,
         "attributes": {
             "min_height": min_height,
             "max_height": max_height,
             "historical_rain": weather.historical_rain,
+            "recent_rain_24h": weather.historical_rain_24h,
             "forecast_rain": forecast_rain,
+            "forecast_rain_next_24h": weather.forecast_rain_next_24h,
+            "forecast_drying_pressure_72h": weather.forecast_drying_pressure_72h,
             "rain_total": rain_total,
             "reason": " ".join(reasons),
         },
     }
+
+
+def _apply_forecast_height_protection(
+    config: dict[str, Any],
+    weather: LawnWeatherData,
+    target: int,
+    min_height: int,
+    max_height: int,
+    reasons: list[str],
+    text: dict[str, str],
+) -> int:
+    """Protect the lawn from being cut too low before a forecast dry spell."""
+    midpoint = _round_to_nearest_5((min_height + max_height) / 2)
+    recent_rain = weather.historical_rain_24h or 0.0
+    imminent_rain = weather.forecast_rain_next_24h or 0.0
+    drying_pressure = weather.forecast_drying_pressure_72h or 0.0
+    meaningful_water = historical_rain_threshold(config)
+    soil_moisture = weather.soil_moisture
+
+    if soil_moisture is not None and soil_moisture < 25:
+        reasons.append(text["low_soil_moisture_height"])
+        return max_height
+
+    if recent_rain >= meaningful_water or imminent_rain >= meaningful_water:
+        reasons.append(text["near_term_water_height"])
+        return min_height
+
+    moisture_protected = (
+        config.get(CONF_WATER_DURING_DROUGHT)
+        or (soil_moisture is not None and soil_moisture >= 35)
+    )
+    if drying_pressure >= HIGH_FORECAST_DRYING_PRESSURE and not moisture_protected:
+        reasons.append(text["high_forecast_drying_height"])
+        return max_height
+
+    if (
+        drying_pressure >= MODERATE_FORECAST_DRYING_PRESSURE
+        and target == min_height
+        and not moisture_protected
+    ):
+        reasons.append(text["moderate_forecast_drying_height"])
+        return midpoint
+
+    return target
 
 
 def general_recommendation(
@@ -223,6 +288,10 @@ def _texts(language: str) -> dict[str, str]:
             "very_low_rain_height": "Samlet regn er langt under den valgte fugtgrænse, så målet holdes på maksimumhøjden.",
             "medium_rain_height": "Samlet regn er under den valgte fugtgrænse, så målet flyttes til medianhøjden.",
             "good_rain_height": "Samlet regn opfylder den valgte fugtgrænse, så minimumhøjden er egnet.",
+            "near_term_water_height": "Nok regn er faldet eller forventes inden for 24 timer, så en lavere klippehøjde er forsvarlig.",
+            "low_soil_moisture_height": "Lav jordfugtighed holder klippehøjden på maksimum for at beskytte plænen.",
+            "high_forecast_drying_height": "Sol, varme og begrænset regn de næste tre døgn holder klippehøjden på maksimum.",
+            "moderate_forecast_drying_height": "Forventet udtørring de næste tre døgn hæver klippehøjden til midten af intervallet.",
             "configured_max_cap": "Det indtastede maksimum bruges som øvre grænse.",
             "configured_height": "Det konfigurerede højdeinterval passer til de aktuelle forhold.",
         }
@@ -254,6 +323,10 @@ def _texts(language: str) -> dict[str, str]:
         "very_low_rain_height": "Combined rain is far below the configured moisture threshold, keeping the target at maximum height.",
         "medium_rain_height": "Combined rain is below the configured moisture threshold, moving the target to median height.",
         "good_rain_height": "Combined rain meets the configured moisture threshold, making minimum height suitable.",
+        "near_term_water_height": "Enough rain has fallen or is expected within 24 hours, making a lower mowing height suitable.",
+        "low_soil_moisture_height": "Low soil moisture keeps the mowing height at maximum to protect the lawn.",
+        "high_forecast_drying_height": "Sun, heat and limited rain over the next three days keep the mowing height at maximum.",
+        "moderate_forecast_drying_height": "Expected drying over the next three days raises the mowing height to the middle of the range.",
         "configured_max_cap": "The configured maximum is used as the upper limit.",
         "configured_height": "Configured lawn height range is suitable for current conditions.",
     }

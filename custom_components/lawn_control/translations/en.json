@@ -189,8 +189,17 @@
           "historical_rain": {
             "name": "Historical rain"
           },
+          "recent_rain_24h": {
+            "name": "Rain last 24 hours"
+          },
           "forecast_rain": {
             "name": "Forecast rain"
+          },
+          "forecast_rain_next_24h": {
+            "name": "Forecast rain next 24 hours"
+          },
+          "forecast_drying_pressure_72h": {
+            "name": "Drying pressure next 72 hours"
           },
           "rain_total": {
             "name": "Combined rain"

@@ -187,6 +187,10 @@ If the required weather entity is unavailable, all Lawn Control entities become 
 ## Grass Height
 
 Recommended grass height is adjusted according to available moisture and seasonal growth.
+The height model distinguishes rain from the last 24 hours, probability-weighted
+rain expected during the next 24 hours and longer-range rain. Forecast sun, heat,
+humidity and rain are combined into a 72-hour drying pressure so rain late in the
+forecast does not lower the mowing height before an intervening dry spell.
 
 ## Drought Risk
 
