@@ -20,11 +20,11 @@ SOIL_MOISTURE_OK = 25
 
 def has_moisture_support(config: dict[str, Any], weather: LawnWeatherData) -> bool:
     """Return whether the lawn has enough moisture support for active care."""
-    if config.get(CONF_WATER_DURING_DROUGHT):
-        return True
-
     if weather.soil_moisture is not None:
         return weather.soil_moisture >= SOIL_MOISTURE_OK
+
+    if config.get(CONF_WATER_DURING_DROUGHT):
+        return True
 
     historical_rain = _rain_value(weather.historical_rain)
     forecast_rain = _rain_value(weather.forecast_rain_5_days)
@@ -77,15 +77,15 @@ def moisture_status(
 ) -> str:
     """Return localized moisture status text."""
     text = _texts(language)
-    if config.get(CONF_WATER_DURING_DROUGHT):
-        return text["watering"]
-
     if weather.soil_moisture is not None:
         return (
             text["supported"]
             if weather.soil_moisture >= SOIL_MOISTURE_OK
             else text["missing"]
         )
+
+    if config.get(CONF_WATER_DURING_DROUGHT):
+        return text["watering"]
 
     return text["supported"] if has_moisture_support(config, weather) else text["missing"]
 

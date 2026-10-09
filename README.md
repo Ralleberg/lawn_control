@@ -186,11 +186,39 @@ If the required weather entity is unavailable, all Lawn Control entities become 
 
 ## Grass Height
 
-Recommended grass height is adjusted according to available moisture and seasonal growth.
+Monthly protective minima take precedence over both preferred height settings.
+A higher configured minimum is respected, including for ornamental lawns.
+
+| Month | Robot mower minimum | Conventional mower minimum |
+|-------|---------------------|----------------------------|
+| March | 50 mm | 60 mm |
+| April | 40 mm | 60 mm |
+| May–September | 40 mm | 50 mm |
+| October | 50 mm | 60 mm |
+| November–February | 50 mm retained autumn protection | 60 mm retained autumn protection |
+
+Winter values retain the autumn minimum; mowing is blocked from November through
+February. Shade, summer stress and wear can increase the protective minimum.
+If the preferred maximum is too low, the protective minimum overrides it.
+`seasonal_min_height`, `configured_min_height`, `configured_max_height`,
+`configured_max_overridden`, `min_height`, `max_height` and `reason` expose the
+resulting decision. Heights are in millimetres.
+
+Recommended grass height is also adjusted according to available moisture and seasonal growth.
 The height model distinguishes rain from the last 24 hours, probability-weighted
 rain expected during the next 24 hours and longer-range rain. Forecast sun, heat,
 humidity and rain are combined into a 72-hour drying pressure so rain late in the
 forecast does not lower the mowing height before an intervening dry spell.
+Strong forecast drying pressure takes precedence over near-term rain when there
+is no adequate soil moisture or configured watering support.
+
+Remove at most one third of the grass height in one cut. For a tracked robot
+mower, the integration raises the target when its estimated current height would
+otherwise require a larger cut, even above the preferred maximum. This estimate
+uses the last registered run and modelled growth; it is not a measured height or
+confirmation of the mower's actual cutting setting. Check actual height and lower
+long grass gradually over several cuts. Without tracking, the one-third rule is
+provided as advice in the mowing entity's `cutting_guidance` attribute.
 
 ## Drought Risk
 
@@ -238,7 +266,20 @@ Mowing recommendations consider:
 - Current growth
 - Recent weather
 
-The mowing recommendation is locked for the configured frequency: every hour, every 4 hours, every 6 hours, or once per day at the configured daily assessment hour. When mowing at night is disabled, mowing is forced off between sunset and sunrise and before the configured daily assessment hour.
+Mowing is blocked outside March–October, in frost or snow, on measured dry soil,
+and ahead of a strong forecast dry spell without moisture support. A watering
+preference cannot override measured dry soil. Robot catch-up obeys these same
+protections. Cold or dormant grass stays at zero estimated growth even when
+fertilizer or favorable weather would otherwise add a growth bonus.
+
+Use sharp blades, avoid wet grass and morning dew, distribute or collect clumps
+of clippings, and vary mowing routes to reduce wheel tracks. Prefer robot starts
+after 09:00 when dew is a concern; the existing start-hour and night preferences
+remain configurable. In autumn, keep a high final cutting setting and remove
+thick layers of leaves. During drought, pause mowing; watering is optional and,
+if used, should be infrequent and deep (about 20 mm per application).
+
+The mowing recommendation is locked for the configured frequency: every hour, every 4 hours, every 6 hours, or once per day at the configured daily assessment hour. Live blocking factors immediately suspend a locked recommendation, and its recommended height always follows the current protected height. When mowing at night is disabled, mowing is forced off between sunset and sunrise and before the configured daily assessment hour.
 
 ## Robot Mower
 
@@ -251,6 +292,13 @@ The robot mower permission sensor evaluates:
 - Optional night mowing restrictions
 
 ## Scarifying
+
+Scarifying is not routine maintenance or a default moss treatment. A positive
+recommendation requires the `high` care level, normal or fast growth, adequate
+moisture and suitable weather between May 1 and September 15. The `aftercare`
+attribute explains the need for overseeding, topdressing and moisture during
+establishment. The integration cannot verify lawn health or completion of this
+aftercare; inspect the lawn before proceeding.
 
 Scarifying recommendations are based on:
 
@@ -292,7 +340,8 @@ Additional translations are welcome through pull requests.
 Verify the integration syntax:
 
 ```bash
-python -m compileall custom_components
+python3 -m compileall custom_components
+python3 -m unittest discover -s tests -v
 ```
 
 ---

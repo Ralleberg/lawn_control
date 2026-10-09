@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from math import ceil, isfinite
 from typing import TYPE_CHECKING, Any
 
 from ..const import (
@@ -30,10 +31,11 @@ def calculate_growth_rate(
 ) -> dict[str, Any]:
     """Estimate grass growth rate."""
     estimated = 1.5
+    temperature = _first_known(weather.temperature, weather.historical_temperature)
     reasons: list[str] = []
     text = _texts(language)
 
-    if weather.month in (12, 1, 2):
+    if weather.month in (11, 12, 1, 2):
         estimated = 0.0
         reasons.append(text["winter_growth"])
     elif weather.month in (4, 5, 6, 9):
@@ -43,14 +45,14 @@ def calculate_growth_rate(
         estimated += 0.5
         reasons.append(text["summer_growth"])
 
-    if weather.temperature is not None:
-        if weather.temperature < 6:
+    if temperature is not None:
+        if temperature < 6:
             estimated = 0.0
             reasons.append(text["cold_growth"])
-        elif 12 <= weather.temperature <= 22:
+        elif 12 <= temperature <= 22:
             estimated += 1.0
             reasons.append(text["good_temperature"])
-        elif weather.temperature >= 28:
+        elif temperature >= 28:
             estimated -= 1.0
             reasons.append(text["hot_growth"])
 
@@ -78,6 +80,11 @@ def calculate_growth_rate(
         estimated += fertilizer_bonus
         reasons.append(text["fertilizer_bonus"].format(bonus=fertilizer_bonus))
 
+    # Weather and fertilizer bonuses cannot restart dormant or cold grass.
+    temperature = _first_known(weather.temperature, weather.historical_temperature)
+    if weather.month in (11, 12, 1, 2) or (temperature is not None and temperature < 6):
+        estimated = 0.0
+        fertilizer_bonus = 0.0
     estimated = max(0.0, round(estimated, 1))
     if estimated == 0:
         rate = "stopped"
@@ -113,7 +120,7 @@ def calculate_mowing_advice(
     language: str,
 ) -> dict[str, Any]:
     """Decide whether mowing is suitable now."""
-    blocking_factors: list[str] = []
+    blocking_factors = mowing_safety_blocks(config, weather, language)
     text = _texts(language)
 
     if drought["value"] in ("high", "critical"):
@@ -128,7 +135,7 @@ def calculate_mowing_advice(
     if weather.forecast_rain is not None and weather.forecast_rain >= 15:
         blocking_factors.append(text["forecast_rain"])
 
-    if weather.weather_state in ("rainy", "pouring", "lightning-rainy"):
+    if weather.weather_state in ("rainy", "pouring", "lightning-rainy", "hail"):
         blocking_factors.append(text["wet_weather"])
 
     if lacks_moisture_support(config, weather):
@@ -148,6 +155,8 @@ def calculate_mowing_advice(
         "attributes": {
             "blocking_factors": blocking_factors,
             "recommended_height": height["value"],
+            "max_cut_fraction": 1 / 3,
+            "cutting_guidance": text["one_third"],
             "recent_hour_rain": weather.recent_hour_rain,
             "reason": reason,
         },
@@ -163,7 +172,7 @@ def calculate_robot_mower_advice(
     language: str,
 ) -> dict[str, Any]:
     """Decide whether a robot mower should be allowed to run."""
-    blocking_factors: list[str] = []
+    blocking_factors = mowing_safety_blocks(config, weather, language)
     text = _texts(language)
 
     if not config.get(CONF_ROBOTIC_MOWER):
@@ -216,6 +225,9 @@ def calculate_robot_mower_advice(
         "attributes": {
             "blocking_factors": blocking_factors,
             "night_mowing_allowed": night_mowing_allowed,
+            "max_cut_fraction": 1 / 3,
+            "cutting_guidance": text["one_third"],
+            "recommended_height": mowing["attributes"]["recommended_height"],
             "night_window_known": not night_window_unknown,
             "sun_is_up": weather.sun_is_up,
             "growth_rate": growth["value"],
@@ -228,19 +240,61 @@ def calculate_robot_mower_advice(
     }
 
 
+def protect_cut_height(
+    height: dict[str, Any], estimated_height: float | None, language: str
+) -> None:
+    """Limit a tracked lawn's estimated cut to one third, rounded upward."""
+    if estimated_height is None or not isfinite(estimated_height) or estimated_height <= 0:
+        return
+    safe_height = ceil(estimated_height * 2 / 3 / 5) * 5
+    if safe_height <= height["value"]:
+        return
+    attributes = height["attributes"]
+    height["value"] = safe_height
+    attributes["min_height"] = max(attributes["min_height"], safe_height)
+    attributes["max_height"] = max(attributes["max_height"], safe_height)
+    attributes["configured_max_overridden"] = safe_height > attributes["configured_max_height"]
+    attributes["estimated_height_before_cut"] = estimated_height
+    attributes["reason"] += " " + _texts(language)["one_third"]
+
+
+def mowing_safety_blocks(
+    config: dict[str, Any], weather: LawnWeatherData, language: str
+) -> list[str]:
+    """Shared protection that also applies to catch-up and locked advice."""
+    text = _texts(language)
+    blocks: list[str] = []
+    if weather.month in (11, 12, 1, 2):
+        blocks.append(text["outside_mowing_season"])
+    if weather.weather_state in ("snowy", "snowy-rainy") or (
+        weather.temperature is not None and weather.temperature <= 0
+    ):
+        blocks.append(text["frost"])
+    if weather.soil_moisture is not None and weather.soil_moisture < 25:
+        blocks.append(text["dry_soil"])
+    if (
+        (weather.forecast_drying_pressure_72h or 0) >= 1.5
+        and not config.get(CONF_WATER_DURING_DROUGHT)
+        and (weather.soil_moisture is None or weather.soil_moisture < 35)
+    ):
+        blocks.append(text["dry_spell"])
+    return blocks
+
+
 def _fertilizer_growth_effect(
     config: dict[str, Any],
     drought: dict[str, Any],
     weather: LawnWeatherData,
 ) -> dict[str, float]:
     """Return the fertilizer growth factors used by the growth rule."""
-    if weather.month in (12, 1, 2):
+    if weather.month in (11, 12, 1, 2):
         return _empty_fertilizer_effect()
 
     if drought["value"] in ("high", "critical"):
         return _empty_fertilizer_effect()
 
-    if weather.temperature is not None and weather.temperature < 6:
+    temperature = _first_known(weather.temperature, weather.historical_temperature)
+    if temperature is not None and temperature < 6:
         return _empty_fertilizer_effect()
 
     n = _float_config(config, CONF_FERTILIZER_N_PERCENT)
@@ -364,10 +418,11 @@ def _watering_growth_bonus(
     if not config.get(CONF_WATER_DURING_DROUGHT):
         return 0.0
 
-    if weather.month in (12, 1, 2):
+    if weather.month in (11, 12, 1, 2):
         return 0.0
 
-    if weather.temperature is not None and weather.temperature < 6:
+    temperature = _first_known(weather.temperature, weather.historical_temperature)
+    if temperature is not None and temperature < 6:
         return 0.0
 
     if drought["value"] not in ("medium", "high", "critical"):
@@ -387,7 +442,7 @@ def _weather_growth_adjustment(
     drought: dict[str, Any],
 ) -> float:
     """Return growth adjustment from sun, temperature and air humidity."""
-    if weather.month in (12, 1, 2):
+    if weather.month in (11, 12, 1, 2):
         return 0.0
 
     temperature = _first_known(weather.temperature, weather.historical_temperature)
@@ -467,6 +522,11 @@ def _texts(language: str) -> dict[str, str]:
     """Return localized mowing text."""
     if language.lower().startswith("da"):
         return {
+            "outside_mowing_season": "Hold klippepause fra november til februar.",
+            "frost": "Undgå klipning ved frost eller sne.",
+            "dry_soil": "Målt tør jord kræver klippepause, selv hvis vanding er aktiveret.",
+            "dry_spell": "En kommende tør periode kræver klippepause for at bevare bladmasse.",
+            "one_third": "Fjern højst en tredjedel af græshøjden pr. klipning; sænk højden gradvist over flere klipninger.",
             "winter_growth": "Vinterforhold stopper normalt synlig vækst.",
             "active_growth": "Sæsonen understøtter aktiv vækst.",
             "summer_growth": "Sommervækst afhænger meget af fugt.",
@@ -507,6 +567,11 @@ def _texts(language: str) -> dict[str, str]:
         }
 
     return {
+        "outside_mowing_season": "Pause mowing from November through February.",
+        "frost": "Avoid mowing in frost or snow.",
+        "dry_soil": "Measured dry soil requires a mowing pause even when watering is enabled.",
+        "dry_spell": "An approaching dry spell requires a mowing pause to preserve leaf area.",
+        "one_third": "Remove at most one third of the grass height per cut; lower the height gradually over multiple cuts.",
         "winter_growth": "Winter conditions usually stop visible growth.",
         "active_growth": "The season supports active growth.",
         "summer_growth": "Summer growth depends strongly on moisture.",

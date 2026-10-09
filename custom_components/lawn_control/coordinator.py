@@ -28,9 +28,9 @@ from .const import (
     CONF_LAST_FERTILIZED_DATE,
     CONF_MOWING_UPDATE_FREQUENCY,
     CONF_RAIN_SENSOR,
-    CONF_ROBOTIC_MOWER,
     CONF_ROBOT_MOWER_ALLOW_NIGHT,
     CONF_ROBOT_MOWER_ENTITY,
+    CONF_ROBOTIC_MOWER,
     CONF_SOIL_MOISTURE_SENSOR,
     CONF_TEMPERATURE_SENSOR,
     CONF_WEATHER_ENTITY,
@@ -44,6 +44,7 @@ from .const import (
     MOWING_UPDATE_FREQUENCIES,
 )
 from .rules.care import build_advice, general_recommendation
+from .rules.mowing import mowing_safety_blocks, protect_cut_height
 
 LOGGER = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ STORAGE_VERSION = 1
 WEATHER_HISTORY_HOURS = 24
 MAX_WEATHER_HISTORY_KEEP_DAYS = 10
 GROWTH_HISTORY_KEEP_DAYS = 21
-MOWING_LOCK_VERSION = 5
+MOWING_LOCK_VERSION = 6
 ROBOT_CATCH_UP_TRIGGER_MM = 3.0
 ROBOT_CATCH_UP_COOLDOWN = timedelta(hours=48)
 ROBOT_MOWER_MOWING_STATE = "mowing"
@@ -84,6 +85,7 @@ class LawnWeatherData:
     unavailable_required_entities: tuple[str, ...]
     unavailable_optional_entities: tuple[str, ...]
     month: int
+    day: int = 1
 
 
 class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -276,6 +278,14 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         mower_saved = self._update_robot_mower_tracking(advice)
         growth_saved = self._update_growth_history(advice)
         mower_status = self._robot_mower_status_data(advice)
+        if self.config.get(CONF_ROBOTIC_MOWER):
+            protect_cut_height(
+                advice["recommended_grass_height"],
+                _as_float(mower_status.get("estimated_grass_height")),
+                language,
+            )
+        for key in ("should_mow", "robot_mower_should_run"):
+            advice[key]["attributes"]["recommended_height"] = advice["recommended_grass_height"]["value"]
         self._apply_robot_mower_status_attributes(advice, mower_status)
         self._apply_robot_mower_catch_up(
             advice,
@@ -459,6 +469,9 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         weather_data: LawnWeatherData,
     ) -> bool:
         """Return whether catch-up mowing must remain blocked."""
+        if mowing_safety_blocks(self.config, weather_data, "en"):
+            return True
+
         entity_id = self.config.get(CONF_ROBOT_MOWER_ENTITY)
         if entity_id:
             state = self.hass.states.get(entity_id)
@@ -533,6 +546,12 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "next_update": lock.get("next_update", next_update.isoformat()),
             "live_value": live["value"],
         }
+        # A cadence lock must never preserve unsafe mowing or a stale low height.
+        locked["attributes"]["recommended_height"] = advice["recommended_grass_height"]["value"]
+        if live["value"] is False:
+            locked["value"] = False
+            locked["attributes"]["blocking_factors"] = live["attributes"]["blocking_factors"]
+            locked["attributes"]["reason"] = live["attributes"]["reason"]
         advice["should_mow"] = locked
 
         return advice, should_save
@@ -760,6 +779,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 dict.fromkeys(unavailable_optional_entities)
             ),
             month=now.month,
+            day=now.day,
         )
 
     def _read_float_sensor(

@@ -34,6 +34,10 @@ if TYPE_CHECKING:
 MODERATE_FORECAST_DRYING_PRESSURE = 0.75
 HIGH_FORECAST_DRYING_PRESSURE = 1.5
 
+# Winter retains the autumn protection height; mowing remains seasonally blocked.
+ROBOT_MONTHLY_MIN_HEIGHT = (50, 50, 50, 40, 40, 40, 40, 40, 40, 50, 50, 50)
+MANUAL_MONTHLY_MIN_HEIGHT = (60, 60, 60, 60, 50, 50, 50, 50, 50, 60, 60, 60)
+
 
 def build_advice(
     config: dict[str, Any], weather: LawnWeatherData, language: str
@@ -91,47 +95,41 @@ def recommended_grass_height(
     configured_max_height = int(
         config.get(CONF_MAX_GRASS_HEIGHT, DEFAULT_MAX_GRASS_HEIGHT)
     )
-    min_height = configured_min_height
-    max_height = configured_max_height
+    monthly_heights = (
+        ROBOT_MONTHLY_MIN_HEIGHT if config.get(CONF_ROBOTIC_MOWER)
+        else MANUAL_MONTHLY_MIN_HEIGHT
+    )
+    seasonal_min_height = monthly_heights[weather.month - 1]
+    min_height = max(configured_min_height, seasonal_min_height)
     reasons: list[str] = []
     text = _texts(language)
+    reasons.append(text["seasonal_height"].format(height=seasonal_min_height))
 
     if config.get(CONF_LAWN_TYPE) == "ornamental":
-        min_height = max(20, min_height - 5)
-        max_height = max(min_height + 5, max_height - 5)
         reasons.append(text["ornamental_height"])
     elif config.get(CONF_LAWN_TYPE) == "wear_tolerant":
         min_height += 5
-        max_height += 5
         reasons.append(text["wear_height"])
     elif config.get(CONF_LAWN_TYPE) == "shade":
         min_height += 10
-        max_height += 10
         reasons.append(text["shade_height"])
 
     if config.get(CONF_SHADE_LEVEL) == "high":
         min_height += 5
-        max_height += 5
         reasons.append(text["high_shade_height"])
 
     if weather.month in (6, 7, 8):
         min_height += 5
-        max_height += 5
         reasons.append(text["summer_height"])
 
     forecast_rain = weather.forecast_rain_5_days
     rain_total = rain_moisture_total(weather)
     rain_threshold = rain_moisture_threshold(config)
 
+    # Protective minima take precedence over the user's preferred maximum.
+    max_height = max(configured_max_height, min_height)
     if max_height > configured_max_height:
-        max_height = configured_max_height
-        reasons.append(text["configured_max_cap"])
-
-    if min_height > max_height:
-        min_height = max_height
-
-    if not reasons:
-        reasons.append(text["configured_height"])
+        reasons.append(text["protective_max_override"])
 
     if rain_total < rain_threshold / 2:
         target = max_height
@@ -153,9 +151,17 @@ def recommended_grass_height(
         text,
     )
 
+    target = max(min_height, min(max_height, target))
     return {
         "value": target,
         "attributes": {
+            "seasonal_min_height": seasonal_min_height,
+            "configured_min_height": configured_min_height,
+            "configured_max_height": configured_max_height,
+            "configured_max_overridden": max_height > configured_max_height,
+            "month": weather.month,
+            "mower_type": "robot" if config.get(CONF_ROBOTIC_MOWER) else "manual",
+            "max_cut_fraction": 1 / 3,
             "min_height": min_height,
             "max_height": max_height,
             "historical_rain": weather.historical_rain,
@@ -190,10 +196,6 @@ def _apply_forecast_height_protection(
         reasons.append(text["low_soil_moisture_height"])
         return max_height
 
-    if recent_rain >= meaningful_water or imminent_rain >= meaningful_water:
-        reasons.append(text["near_term_water_height"])
-        return min_height
-
     moisture_protected = (
         config.get(CONF_WATER_DURING_DROUGHT)
         or (soil_moisture is not None and soil_moisture >= 35)
@@ -209,6 +211,10 @@ def _apply_forecast_height_protection(
     ):
         reasons.append(text["moderate_forecast_drying_height"])
         return midpoint
+
+    if recent_rain >= meaningful_water or imminent_rain >= meaningful_water:
+        reasons.append(text["near_term_water_height"])
+        return min_height
 
     return target
 
@@ -262,7 +268,9 @@ def _texts(language: str) -> dict[str, str]:
     """Return localized rule text."""
     if language.lower().startswith("da"):
         return {
-            "water": "Prioriter vanding og undgå at stresse plænen.",
+            "seasonal_height": "Månedens minimum for denne klippertype er {height} mm.",
+            "protective_max_override": "Den beskyttende minimumshøjde overstyrer det indtastede maksimum.",
+            "water": "Hold pause med klipning under tørke. Hvis du vander, så vand sjældent og grundigt, ca. 20 mm ad gangen.",
             "drought": "Tørkerisikoen er {risk}.",
             "mow": "Det er egnet at slå græs i dag.",
             "mow_reason": "Forholdene er tørre nok, og væksten understøtter klipning.",
@@ -280,7 +288,7 @@ def _texts(language: str) -> dict[str, str]:
             "slow": "langsom",
             "normal": "normal",
             "fast": "hurtig",
-            "ornamental_height": "Prydplæner kan holdes en smule kortere.",
+            "ornamental_height": "Prydplænens ønskede højde respekteres inden for månedens beskyttende minimum.",
             "wear_height": "Slidstærke plæner kommer sig bedre med lidt mere bladmasse.",
             "shade_height": "Skyggeplæner har brug for ekstra bladmasse for stærkere vækst.",
             "high_shade_height": "Meget skygge øger den anbefalede klippehøjde.",
@@ -297,7 +305,9 @@ def _texts(language: str) -> dict[str, str]:
         }
 
     return {
-        "water": "Prioritize watering and avoid stressing the lawn.",
+        "seasonal_height": "This month's minimum for this mower type is {height} mm.",
+        "protective_max_override": "The protective minimum height overrides the configured maximum.",
+        "water": "Pause mowing during drought. If watering, water infrequently and deeply, about 20 mm per application.",
         "drought": "Drought risk is {risk}.",
         "mow": "Mowing is suitable today.",
         "mow_reason": "Conditions are dry enough and growth supports regular mowing.",
@@ -315,7 +325,7 @@ def _texts(language: str) -> dict[str, str]:
         "slow": "slow",
         "normal": "normal",
         "fast": "fast",
-        "ornamental_height": "Ornamental lawns can be kept slightly shorter.",
+        "ornamental_height": "The preferred ornamental lawn height respects the monthly protective minimum.",
         "wear_height": "Wear tolerant lawns recover better with a little more leaf area.",
         "shade_height": "Shaded lawns need extra leaf area for stronger growth.",
         "high_shade_height": "High shade increases the recommended cutting height.",
