@@ -16,6 +16,7 @@ from ..const import (
     CONF_WATERING_LEVEL,
 )
 from .moisture import lacks_moisture_support
+from .season import GROWTH_STOP_TEMPERATURE, growth_temperature
 
 if TYPE_CHECKING:
     from ..coordinator import LawnWeatherData
@@ -31,7 +32,7 @@ def calculate_growth_rate(
 ) -> dict[str, Any]:
     """Estimate grass growth rate."""
     estimated = 1.5
-    temperature = _first_known(weather.temperature, weather.historical_temperature)
+    temperature = growth_temperature(weather)
     reasons: list[str] = []
     text = _texts(language)
 
@@ -46,7 +47,7 @@ def calculate_growth_rate(
         reasons.append(text["summer_growth"])
 
     if temperature is not None:
-        if temperature < 6:
+        if temperature <= GROWTH_STOP_TEMPERATURE:
             estimated = 0.0
             reasons.append(text["cold_growth"])
         elif 12 <= temperature <= 22:
@@ -81,10 +82,18 @@ def calculate_growth_rate(
         reasons.append(text["fertilizer_bonus"].format(bonus=fertilizer_bonus))
 
     # Weather and fertilizer bonuses cannot restart dormant or cold grass.
-    temperature = _first_known(weather.temperature, weather.historical_temperature)
-    if weather.month in (11, 12, 1, 2) or (temperature is not None and temperature < 6):
+    temperature = growth_temperature(weather)
+    if weather.month in (11, 12, 1, 2) or (temperature is not None and temperature <= GROWTH_STOP_TEMPERATURE):
         estimated = 0.0
         fertilizer_bonus = 0.0
+    temperature_factor = (
+        min(1.0, max(0.0, (temperature - GROWTH_STOP_TEMPERATURE) / 6))
+        if temperature is not None else 1.0
+    )
+    estimated *= temperature_factor
+    fertilizer_bonus = round(fertilizer_bonus * temperature_factor, 1)
+    if 0 < temperature_factor < 1:
+        reasons.append(text["cool_growth"])
     estimated = max(0.0, round(estimated, 1))
     if estimated == 0:
         rate = "stopped"
@@ -102,6 +111,10 @@ def calculate_growth_rate(
     return {
         "value": rate,
         "attributes": {
+            "temperature": weather.temperature,
+            "historical_temperature": weather.historical_temperature,
+            "growth_temperature": temperature,
+            "temperature_growth_factor": round(temperature_factor, 2),
             "estimated_mm_per_day": estimated,
             "estimated_mm_next_7_days": round(estimated * 7, 1),
             "fertilizer_growth_bonus_mm_per_day": fertilizer_bonus,
@@ -122,6 +135,8 @@ def calculate_mowing_advice(
     """Decide whether mowing is suitable now."""
     blocking_factors = mowing_safety_blocks(config, weather, language)
     text = _texts(language)
+    if growth["attributes"].get("mowing_season_status", "ready") != "ready":
+        blocking_factors.append(growth["attributes"]["mowing_season_label"])
 
     if drought["value"] in ("high", "critical"):
         blocking_factors.append(text["mow_drought"])
@@ -174,6 +189,8 @@ def calculate_robot_mower_advice(
     """Decide whether a robot mower should be allowed to run."""
     blocking_factors = mowing_safety_blocks(config, weather, language)
     text = _texts(language)
+    if growth["attributes"].get("mowing_season_status", "ready") != "ready":
+        blocking_factors.append(growth["attributes"]["mowing_season_label"])
 
     if not config.get(CONF_ROBOTIC_MOWER):
         blocking_factors.append(text["robot_disabled"])
@@ -193,7 +210,7 @@ def calculate_robot_mower_advice(
     if weather.historical_humidity is not None and weather.historical_humidity >= 90:
         blocking_factors.append(text["history_humidity"])
 
-    if weather.historical_temperature is not None and weather.historical_temperature < 6:
+    if weather.historical_temperature is not None and weather.historical_temperature <= GROWTH_STOP_TEMPERATURE:
         blocking_factors.append(text["history_cold"])
 
     if lacks_moisture_support(config, weather):
@@ -270,6 +287,9 @@ def mowing_safety_blocks(
         weather.temperature is not None and weather.temperature <= 0
     ):
         blocks.append(text["frost"])
+    temperature = growth_temperature(weather)
+    if temperature is not None and temperature <= GROWTH_STOP_TEMPERATURE:
+        blocks.append(text["cold_growth"])
     if weather.soil_moisture is not None and weather.soil_moisture < 25:
         blocks.append(text["dry_soil"])
     if (
@@ -293,8 +313,8 @@ def _fertilizer_growth_effect(
     if drought["value"] in ("high", "critical"):
         return _empty_fertilizer_effect()
 
-    temperature = _first_known(weather.temperature, weather.historical_temperature)
-    if temperature is not None and temperature < 6:
+    temperature = growth_temperature(weather)
+    if temperature is not None and temperature <= GROWTH_STOP_TEMPERATURE:
         return _empty_fertilizer_effect()
 
     n = _float_config(config, CONF_FERTILIZER_N_PERCENT)
@@ -421,8 +441,8 @@ def _watering_growth_bonus(
     if weather.month in (11, 12, 1, 2):
         return 0.0
 
-    temperature = _first_known(weather.temperature, weather.historical_temperature)
-    if temperature is not None and temperature < 6:
+    temperature = growth_temperature(weather)
+    if temperature is not None and temperature <= GROWTH_STOP_TEMPERATURE:
         return 0.0
 
     if drought["value"] not in ("medium", "high", "critical"):
@@ -445,12 +465,12 @@ def _weather_growth_adjustment(
     if weather.month in (11, 12, 1, 2):
         return 0.0
 
-    temperature = _first_known(weather.temperature, weather.historical_temperature)
+    temperature = growth_temperature(weather)
     humidity = _first_known(weather.humidity, weather.historical_humidity)
     sun_factor = _sun_factor(weather.weather_state, weather.forecast_condition)
     moisture_missing = lacks_moisture_support(config, weather)
 
-    if temperature is not None and temperature < 6:
+    if temperature is not None and temperature <= GROWTH_STOP_TEMPERATURE:
         return 0.0
 
     if (
@@ -527,6 +547,7 @@ def _texts(language: str) -> dict[str, str]:
             "dry_soil": "Målt tør jord kræver klippepause, selv hvis vanding er aktiveret.",
             "dry_spell": "En kommende tør periode kræver klippepause for at bevare bladmasse.",
             "one_third": "Fjern højst en tredjedel af græshøjden pr. klipning; sænk højden gradvist over flere klipninger.",
+            "cool_growth": "Køligt vejr reducerer væksten gradvist mellem 6 og 12 °C.",
             "winter_growth": "Vinterforhold stopper normalt synlig vækst.",
             "active_growth": "Sæsonen understøtter aktiv vækst.",
             "summer_growth": "Sommervækst afhænger meget af fugt.",
@@ -572,6 +593,7 @@ def _texts(language: str) -> dict[str, str]:
         "dry_soil": "Measured dry soil requires a mowing pause even when watering is enabled.",
         "dry_spell": "An approaching dry spell requires a mowing pause to preserve leaf area.",
         "one_third": "Remove at most one third of the grass height per cut; lower the height gradually over multiple cuts.",
+        "cool_growth": "Cool weather gradually reduces growth between 6 and 12 °C.",
         "winter_growth": "Winter conditions usually stop visible growth.",
         "active_growth": "The season supports active growth.",
         "summer_growth": "Summer growth depends strongly on moisture.",

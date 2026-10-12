@@ -1,7 +1,10 @@
 """Rule regressions runnable without installing Home Assistant."""
 
+import __future__
+
 import ast
 import importlib.util
+import json
 import sys
 import types
 import unittest
@@ -33,7 +36,8 @@ maintenance = sys.modules[f"{PACKAGE}.rules.maintenance"]
 
 def weather(**updates):
     values = dict(
-        month=5, day=1, temperature=18, humidity=60, weather_state="cloudy",
+        month=5, day=1, seasonal_temperature_72h=None,
+        seasonal_temperature_coverage_hours=0, temperature=18, humidity=60, weather_state="cloudy",
         forecast_condition="cloudy", recent_rain=0, recent_hour_rain=0,
         historical_rain=20, historical_rain_24h=0, forecast_rain=0,
         forecast_rain_5_days=0, forecast_rain_next_24h=0,
@@ -151,14 +155,129 @@ class LawnRulesTest(unittest.TestCase):
         method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "_robot_catch_up_hard_blocked")
         namespace = dict(Any=object, LawnWeatherData=object,
                          mowing_safety_blocks=mowing.mowing_safety_blocks)
-        exec(compile(ast.Module(body=[method], type_ignores=[]), "coordinator.py", "exec"), namespace)
+        exec(compile(ast.Module(body=[method], type_ignores=[]), "coordinator.py", "exec", flags=__future__.annotations.compiler_flag), namespace)
         coordinator = SimpleNamespace(config={"water_during_drought": True})
         for conditions in (dict(month=11), dict(weather_state="snowy"), dict(soil_moisture=10)):
             self.assertTrue(namespace["_robot_catch_up_hard_blocked"](
                 coordinator, {}, weather(**conditions)))
 
+    def test_cool_temperature_reduces_growth_and_freezes_at_threshold(self):
+        estimates = []
+        for temperature in (4, 6, 7, 8, 10, 12, 18):
+            result = care.build_advice({"robotic_mower": True}, weather(
+                temperature=temperature, historical_temperature=temperature), "da")
+            estimates.append(result["growth_rate"]["attributes"]["estimated_mm_per_day"])
+        self.assertEqual(estimates[:2], [0, 0])
+        self.assertEqual(estimates, sorted(estimates))
+        self.assertGreater(estimates[-1], estimates[2])
+
+    def test_warm_spike_does_not_restart_cold_growth(self):
+        result = care.build_advice({"robotic_mower": True}, weather(
+            temperature=15, historical_temperature=4), "da")
+        self.assertEqual(result["growth_rate"]["attributes"]["estimated_mm_per_day"], 0)
+        self.assertFalse(result["robot_mower_should_run"]["value"])
+        self.assertEqual(result["growth_rate"]["attributes"]["mowing_season_status"], "cold_pause")
+
+    def test_cold_pause_storage_and_spring_restart(self):
+        config = {"robotic_mower": True}
+        def status(previous=None, **inputs):
+            result = care.build_advice(config, weather(**inputs), "da", previous)
+            self.assertEqual(result["care_recommendation"]["attributes"]["mowing_season_status"],
+                             result["growth_rate"]["attributes"]["mowing_season_status"])
+            return result
+        cold = status(month=10, temperature=4, historical_temperature=5)
+        self.assertEqual(cold["growth_rate"]["attributes"]["mowing_season_status"], "cold_pause")
+        self.assertFalse(cold["growth_rate"]["attributes"]["winter_storage_recommended"])
+        sustained = status(month=10, temperature=4, historical_temperature=5,
+                           seasonal_temperature_72h=5, seasonal_temperature_coverage_hours=71)
+        self.assertTrue(sustained["growth_rate"]["attributes"]["winter_storage_recommended"])
+        winter = status(month=1, temperature=15, historical_temperature=15)
+        self.assertEqual(winter["growth_rate"]["attributes"]["mowing_season_status"], "winter_pause")
+        warming = status("winter_pause", month=3, temperature=7, historical_temperature=7)
+        self.assertEqual(warming["growth_rate"]["attributes"]["mowing_season_status"], "warming_up")
+        ready = status("warming_up", month=3, temperature=8, historical_temperature=8)
+        self.assertEqual(ready["growth_rate"]["attributes"]["mowing_season_status"], "ready")
+        still_ready = status("ready", month=3, temperature=7, historical_temperature=7)
+        self.assertEqual(still_ready["growth_rate"]["attributes"]["mowing_season_status"], "ready")
+        cold_again = status("ready", month=3, temperature=6, historical_temperature=7)
+        self.assertEqual(cold_again["growth_rate"]["attributes"]["mowing_season_status"], "cold_pause")
+
+    def test_readiness_does_not_override_wet_mowing_blocks(self):
+        result = care.build_advice({"robotic_mower": True}, weather(weather_state="rainy"), "en")
+        self.assertEqual(result["growth_rate"]["attributes"]["mowing_season_status"], "ready")
+        self.assertFalse(result["robot_mower_should_run"]["value"])
+        self.assertIn("Ready for the mowing season", result["care_recommendation"]["value"])
+
+    def test_missing_temperature_is_not_reported_as_ready(self):
+        result = care.build_advice({"robotic_mower": True}, weather(
+            temperature=None, historical_temperature=None), "da")
+        self.assertEqual(result["growth_rate"]["attributes"]["mowing_season_status"], "unknown")
+        self.assertFalse(result["robot_mower_should_run"]["value"])
+
+    def test_cool_humid_air_reduces_rain_deficit_risk(self):
+        drought = sys.modules[f"{PACKAGE}.rules.drought"]
+        common = dict(historical_rain=0, recent_rain=0, forecast_rain_5_days=0,
+                      soil_moisture=None, weather_state="sunny", month=10)
+        cool = drought.calculate_drought_risk({}, weather(**common,
+            temperature=10, historical_temperature=10, humidity=90,
+            historical_humidity=90), "da")
+        hot = drought.calculate_drought_risk({}, weather(**common,
+            temperature=30, historical_temperature=30, humidity=30,
+            historical_humidity=30), "da")
+        self.assertEqual(cool["value"], "low")
+        self.assertEqual(hot["value"], "critical")
+        self.assertLess(cool["attributes"]["rain_deficit_weight"], hot["attributes"]["rain_deficit_weight"])
+
+    def test_humid_air_and_watering_do_not_hide_measured_dry_soil(self):
+        drought = sys.modules[f"{PACKAGE}.rules.drought"]
+        for soil, risk in ((20, "medium"), (10, "high")):
+            result = drought.calculate_drought_risk({"water_during_drought": True}, weather(
+                temperature=5, historical_temperature=5, humidity=95,
+                historical_humidity=95, soil_moisture=soil), "en")
+            self.assertEqual(result["value"], risk)
+
+    def test_vpd_uses_paired_samples_and_preserves_recent_drying(self):
+        drought = sys.modules[f"{PACKAGE}.rules.drought"]
+        vpd = drought._observed_vapour_pressure_deficit(weather(
+            temperature=5, humidity=95, historical_temperature=20, historical_humidity=40))
+        self.assertGreater(vpd, 1)
+        self.assertIsNone(drought._observed_vapour_pressure_deficit(weather(
+            temperature=None, historical_temperature=None)))
+
+    def test_temperature_history_requires_coverage_not_a_single_sample(self):
+        tree = ast.parse((ROOT / "coordinator.py").read_text())
+        names = {"_seasonal_temperature_summary", "_average", "_as_float", "_growth_total_since"}
+        methods = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in names]
+        namespace = dict(Any=object, datetime=datetime, timedelta=timedelta,
+                         _parse_datetime=lambda value: datetime.fromisoformat(value) if value else None)
+        exec(compile(ast.Module(body=methods, type_ignores=[]), "coordinator.py", "exec", flags=__future__.annotations.compiler_flag), namespace)
+        now = datetime(2026, 10, 12, 12)
+        summary = namespace["_seasonal_temperature_summary"]
+        self.assertEqual(summary([dict(time=now.isoformat(), temperature=4)], now), (4, 0))
+        samples = [dict(time=(now-timedelta(hours=h)).isoformat(), temperature=4) for h in range(72)]
+        self.assertEqual(summary(samples, now), (4, 71))
+        # More refreshes within an hour cannot manufacture three days of history.
+        samples = [dict(time=(now-timedelta(minutes=m)).isoformat(), temperature=4) for m in range(72)]
+        self.assertEqual(summary(samples, now), (4, 0))
+        growth_samples = [dict(time=(now-timedelta(hours=24)).isoformat(), growth=2),
+                          dict(time=(now-timedelta(hours=12)).isoformat(), growth=0)]
+        self.assertEqual(namespace["_growth_total_since"](growth_samples, now-timedelta(hours=24), now), 1)
+
+    def test_season_attributes_have_danish_and_english_labels(self):
+        attributes = care.build_advice({}, weather(), "da")["growth_rate"]["attributes"]
+        keys = {"mowing_season_status", "mowing_season_label", "mowing_season_reason",
+                "winter_storage_recommended", "temperature", "historical_temperature",
+                "growth_temperature", "temperature_growth_factor", "seasonal_temperature_72h",
+                "seasonal_temperature_coverage_hours", "growth_stop_temperature", "growth_resume_temperature"}
+        self.assertTrue(keys <= set(attributes))
+        for language in ("da", "en"):
+            translation = json.loads((ROOT / "translations" / f"{language}.json").read_text())
+            labels = translation["entity"]["sensor"]["growth_rate"]["state_attributes"]
+            self.assertTrue(keys <= set(labels))
+
     def test_localizations_have_matching_keys(self):
-        for module in (care, mowing, maintenance, moisture):
+        for module in (care, mowing, maintenance, moisture,
+                       sys.modules[f"{PACKAGE}.rules.season"], sys.modules[f"{PACKAGE}.rules.drought"]):
             self.assertEqual(set(module._texts("da")), set(module._texts("en")))
 
     def test_lock_cannot_preserve_unsafe_mowing_or_old_height(self):
@@ -172,7 +291,7 @@ class LawnRulesTest(unittest.TestCase):
                          _mowing_update_frequency=lambda _: "daily",
                          _mowing_period_start=lambda *_: now,
                          _next_mowing_period_start=lambda start, _: start + timedelta(days=1))
-        exec(compile(ast.Module(body=[method], type_ignores=[]), "coordinator.py", "exec"), namespace)
+        exec(compile(ast.Module(body=[method], type_ignores=[]), "coordinator.py", "exec", flags=__future__.annotations.compiler_flag), namespace)
         coordinator = SimpleNamespace(config={}, daily_update_hour=8, _stored_data={})
         advice = dict(should_mow=dict(value=True, attributes=dict(recommended_height=40)),
                       recommended_grass_height=dict(value=50))

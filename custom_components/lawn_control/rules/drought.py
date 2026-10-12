@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from math import exp
 from typing import TYPE_CHECKING, Any
 
 from ..const import CONF_SOIL_TYPE, CONF_WATER_DURING_DROUGHT, CONF_WATERING_LEVEL
@@ -16,6 +17,7 @@ def calculate_drought_risk(
 ) -> dict[str, Any]:
     """Estimate drought risk from recent rain, forecast rain, heat, humidity and soil."""
     score = 0
+    rain_deficit_score = 0
     text = _texts(language)
 
     recent_rain = _best_recent_rain(weather.recent_rain, weather.historical_rain)
@@ -27,18 +29,23 @@ def calculate_drought_risk(
     forecast_threshold = forecast_rain_threshold(config)
 
     if recent_rain is None:
-        score += 20
+        rain_deficit_score += 20
     elif recent_rain < historical_threshold / 4:
-        score += 35
+        rain_deficit_score += 35
     elif recent_rain < historical_threshold:
-        score += 20
+        rain_deficit_score += 20
 
     if forecast_rain is None:
-        score += 10
+        rain_deficit_score += 10
     elif forecast_rain < forecast_threshold / 4:
-        score += 20
+        rain_deficit_score += 20
     elif forecast_rain >= forecast_threshold:
-        score -= 15
+        rain_deficit_score -= 15
+
+    vpd = _observed_vapour_pressure_deficit(weather)
+    # A heuristic atmospheric-demand weight, not an evapotranspiration model.
+    drying_factor = min(1.5, max(0.25, vpd / 1.2)) if vpd is not None else 1.0
+    score += rain_deficit_score * drying_factor if rain_deficit_score > 0 else rain_deficit_score
 
     if temperature is not None and temperature >= 28:
         score += 25
@@ -55,7 +62,7 @@ def calculate_drought_risk(
         score -= 5
 
     if sun_stress:
-        score += sun_stress
+        score += sun_stress * drying_factor
         if temperature is not None and temperature >= 24:
             score += 5
 
@@ -77,7 +84,14 @@ def calculate_drought_risk(
     if watering_reduction:
         score -= watering_reduction
 
-    score = max(0, min(100, score))
+    # Dry measurements cannot be dismissed because the air is humid or watering
+    # is enabled. Humid air reduces drying; it does not replenish the soil.
+    if weather.soil_moisture is not None:
+        if weather.soil_moisture < 15:
+            score = max(60, score)
+        elif weather.soil_moisture < 25:
+            score = max(35, score)
+    score = max(0, min(100, round(score)))
     if score >= 80:
         risk = "critical"
     elif score >= 60:
@@ -91,11 +105,36 @@ def calculate_drought_risk(
         "value": risk,
         "attributes": {
             "score": score,
+            "temperature": temperature,
+            "humidity": humidity,
+            "vapour_pressure_deficit_kpa": round(vpd, 3) if vpd is not None else None,
+            "rain_deficit_weight": round(drying_factor, 2),
+            "soil_moisture": weather.soil_moisture,
             "historical_rain": weather.historical_rain,
             "forecast_rain": forecast_rain,
-            "reason": text["reason"].format(score=score),
+            "reason": text["reason"].format(score=score) + (
+                " " + text["low_evaporation"] if drying_factor < 1 else ""
+            ) + (
+                " " + text["measured_dry"]
+                if weather.soil_moisture is not None and weather.soil_moisture < 25 else ""
+            ),
         },
     }
+
+
+def _observed_vapour_pressure_deficit(weather: LawnWeatherData) -> float | None:
+    """Compute paired current/historical VPD using FAO-56 saturation pressure."""
+    values = []
+    for temperature, humidity in (
+        (weather.temperature, weather.humidity),
+        (weather.historical_temperature, weather.historical_humidity),
+    ):
+        if temperature is None or humidity is None or not -80 <= temperature <= 60 or not 0 <= humidity <= 100:
+            continue
+        saturation = 0.6108 * exp(17.27 * temperature / (temperature + 237.3))
+        values.append(saturation * (1 - humidity / 100))
+    # Preserve a recent drying signal rather than hiding it behind a humid night.
+    return max(values) if values else None
 
 
 def _best_recent_rain(
@@ -147,6 +186,8 @@ def _texts(language: str) -> dict[str, str]:
     """Return localized drought text."""
     if language.lower().startswith("da"):
         return {
+            "low_evaporation": "Temperatur og luftfugtighed giver lavt fordampningspres, så manglende regn vægtes lavere. Det er ikke en måling af jordfugtighed.",
+            "measured_dry": "Målt tør jord fastholder mindst mellem tørkerisiko, uanset luftfugtighed og vandingsindstilling.",
             "unknown": "ukendt",
             "very_low": "meget lav",
             "low": "lav",
@@ -164,6 +205,8 @@ def _texts(language: str) -> dict[str, str]:
         }
 
     return {
+        "low_evaporation": "Temperature and humidity indicate low atmospheric drying demand, so missing rain has less weight. This is not a soil moisture measurement.",
+        "measured_dry": "Measured dry soil retains at least medium drought risk regardless of air humidity or watering preference.",
         "unknown": "unknown",
         "very_low": "very low",
         "low": "low",

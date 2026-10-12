@@ -253,6 +253,21 @@
           },
           "reason": {
             "name": "Årsag"
+          },
+          "temperature": {
+            "name": "Aktuel udendørstemperatur"
+          },
+          "humidity": {
+            "name": "Luftfugtighed"
+          },
+          "vapour_pressure_deficit_kpa": {
+            "name": "Luftens damptryksunderskud (kPa)"
+          },
+          "rain_deficit_weight": {
+            "name": "Vægtning af manglende regn"
+          },
+          "soil_moisture": {
+            "name": "Målt jordfugtighed"
           }
         }
       },
@@ -279,6 +294,42 @@
           },
           "reason": {
             "name": "Årsag"
+          },
+          "mowing_season_status": {
+            "name": "Klippesæsonens status"
+          },
+          "mowing_season_label": {
+            "name": "Sæsonbesked"
+          },
+          "mowing_season_reason": {
+            "name": "Årsag til sæsonstatus"
+          },
+          "winter_storage_recommended": {
+            "name": "Vinteropbevaring anbefalet"
+          },
+          "temperature": {
+            "name": "Aktuel udendørstemperatur"
+          },
+          "historical_temperature": {
+            "name": "Temperatur seneste døgn"
+          },
+          "growth_temperature": {
+            "name": "Temperatur brugt til vækst"
+          },
+          "temperature_growth_factor": {
+            "name": "Temperaturens vækstfaktor"
+          },
+          "seasonal_temperature_72h": {
+            "name": "Temperatur seneste tre døgn"
+          },
+          "seasonal_temperature_coverage_hours": {
+            "name": "Temperaturhistorikkens dækning i timer"
+          },
+          "growth_stop_temperature": {
+            "name": "Temperaturgrænse for klippepause"
+          },
+          "growth_resume_temperature": {
+            "name": "Temperaturgrænse for sæsonstart"
           }
         }
       },
@@ -325,6 +376,12 @@
           },
           "reason": {
             "name": "Årsag"
+          },
+          "mowing_season_status": {
+            "name": "Klippesæsonens status"
+          },
+          "winter_storage_recommended": {
+            "name": "Vinteropbevaring anbefalet"
           }
         }
       }

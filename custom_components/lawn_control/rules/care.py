@@ -27,6 +27,7 @@ from .mowing import (
     calculate_mowing_advice,
     calculate_robot_mower_advice,
 )
+from .season import mowing_season_status
 
 if TYPE_CHECKING:
     from ..coordinator import LawnWeatherData
@@ -40,12 +41,14 @@ MANUAL_MONTHLY_MIN_HEIGHT = (60, 60, 60, 60, 50, 50, 50, 50, 50, 60, 60, 60)
 
 
 def build_advice(
-    config: dict[str, Any], weather: LawnWeatherData, language: str
+    config: dict[str, Any], weather: LawnWeatherData, language: str,
+    previous_season_status: str | None = None,
 ) -> dict[str, Any]:
     """Build all lawn advice from config and weather inputs."""
     height = recommended_grass_height(config, weather, language)
     drought = calculate_drought_risk(config, weather, language)
     growth = calculate_growth_rate(config, weather, drought, language)
+    growth["attributes"].update(mowing_season_status(weather, language, previous_season_status))
     fertilizer = calculate_fertilizer_score(config, weather, drought, growth, language)
     mowing = calculate_mowing_advice(
         config, weather, drought, growth, height, language
@@ -231,6 +234,21 @@ def general_recommendation(
     actions: list[str] = []
     reasons: list[str] = []
     text = _texts(language)
+    season = growth["attributes"]
+    status = season.get("mowing_season_status")
+    if status and status != "ready":
+        return {
+            "value": season["mowing_season_label"],
+            "attributes": {
+                "actions": [season["mowing_season_label"]],
+                "reason": season["mowing_season_reason"],
+                "mowing_season_status": status,
+                "winter_storage_recommended": season["winter_storage_recommended"],
+            },
+        }
+    if status == "ready":
+        actions.append(season["mowing_season_label"])
+        reasons.append(season["mowing_season_reason"])
 
     if drought["value"] in ("high", "critical"):
         actions.append(text["water"])
@@ -246,7 +264,7 @@ def general_recommendation(
     ):
         actions.append(text["fertilize"])
         reasons.append(text["fertilizer_score"].format(score=fertilizer["score"]))
-    if not actions:
+    if not actions or (status == "ready" and len(actions) == 1):
         actions.append(text["monitor"])
         reasons.append(text["growth"].format(growth=text[growth["value"]]))
 
@@ -254,6 +272,8 @@ def general_recommendation(
         "value": " ".join(actions),
         "attributes": {
             "actions": actions,
+            "mowing_season_status": status,
+            "winter_storage_recommended": False,
             "reason": " ".join(reasons),
         },
     }

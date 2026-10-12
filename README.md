@@ -222,6 +222,19 @@ provided as advice in the mowing entity's `cutting_guidance` attribute.
 
 ## Drought Risk
 
+Rainfall deficits and sunlight are weighted by atmospheric drying demand derived
+from paired outdoor temperature and relative humidity readings (current and
+recent mean). Cool, humid air reduces the deficit weight; warm, dry air increases
+it. The paired samples use the FAO-56 saturation vapour pressure formula, retaining
+the higher recent vapour pressure deficit so a humid night does not hide a dry day.
+This is a heuristic risk score, not a full evapotranspiration or soil water model.
+The physical basis is described in [FAO's meteorological guidance](https://www.fao.org/4/X0490E/x0490e07.htm).
+
+Humid air does not prove that soil is wet: measured soil moisture below 25 retains
+at least medium risk, and below 15 at least high risk, even if watering is enabled.
+The sensor exposes `temperature`, `humidity`, `vapour_pressure_deficit_kpa`,
+`rain_deficit_weight`, `soil_moisture` and an explanation of the adjustment.
+
 Calculated using:
 
 - Rain history
@@ -234,6 +247,44 @@ Calculated using:
 - Season
 
 ## Growth Rate
+
+Outdoor temperature already affects growth and therefore tracked grass height:
+stored hourly growth rates are integrated since the last registered mower run.
+At or below 6 °C the model estimates zero growth; from 6 to 12 °C growth and
+fertilizer bonuses increase gradually. The cooler of the current air temperature
+and available 24-hour mean is used, preventing a brief warm afternoon from
+restarting growth while the recent weather remains cold. These are advisory air
+temperature thresholds, not measured soil temperatures or universal biological
+limits. Estimated current grass height and recommended cutting height remain
+separate concepts; monthly minimum cutting heights still apply.
+
+### Season status on existing entities
+
+The growth sensor now exposes `mowing_season_status`, `mowing_season_label`,
+`mowing_season_reason` and `winter_storage_recommended`. The care recommendation
+also shows the seasonal message, so an existing card using that entity can show
+storage advice and season readiness without an additional entity.
+
+| Status | Meaning |
+|--------|---------|
+| `winter_pause` | November–February, or sustained cold autumn weather: winter storage advised. |
+| `cold_pause` | Current or recent mean temperature is at most 6 °C, or snow: pause mowing; a cold night alone does not imply winter storage. |
+| `warming_up` | After a pause, wait until current and available daily mean temperatures reach 8 °C. |
+| `ready` | March–October and temperature readiness satisfied; daily weather, moisture and growth checks still apply. |
+| `unknown` | No usable current or recent temperature data. |
+
+Readiness persists down to just above 6 °C once established; after a pause, 8 °C
+is required to restart. This status is stored across integration restarts.
+Autumn storage advice in September–October requires a three-day mean at or below
+6 °C, at least 48 distinct hourly samples spanning 70 hours, and current cold
+conditions. The mean and coverage are exposed as `seasonal_temperature_72h` and
+`seasonal_temperature_coverage_hours`. Sparse history cannot trigger early storage.
+The seasonal message reports temperature readiness, not permission to run today:
+night restrictions, rain, drought and insufficient growth can still prevent mowing.
+
+For a Markdown dashboard card, the existing growth sensor's message can be shown
+with `{{ state_attr('sensor.lawn_growth_rate', 'mowing_season_label') }}`. Replace
+the entity ID with the one in your installation if it differs.
 
 Growth depends on:
 

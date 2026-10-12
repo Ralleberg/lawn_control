@@ -86,6 +86,8 @@ class LawnWeatherData:
     unavailable_optional_entities: tuple[str, ...]
     month: int
     day: int = 1
+    seasonal_temperature_72h: float | None = None
+    seasonal_temperature_coverage_hours: float = 0.0
 
 
 class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -273,7 +275,12 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         weather_data = self._read_weather_data(forecasts)
         weather_data, history_saved = self._update_weather_history(weather_data)
         language = getattr(self.hass.config, "language", "en")
-        advice = build_advice(self.config, weather_data, language)
+        previous_season_status = self._stored_data.get("mowing_season_status")
+        advice = build_advice(self.config, weather_data, language, previous_season_status)
+        season_status = advice["growth_rate"]["attributes"]["mowing_season_status"]
+        season_saved = season_status != previous_season_status
+        if season_saved:
+            self._stored_data["mowing_season_status"] = season_status
         advice["availability"] = _availability_data(weather_data)
         mower_saved = self._update_robot_mower_tracking(advice)
         growth_saved = self._update_growth_history(advice)
@@ -296,7 +303,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         advice, should_save = self._apply_mowing_frequency_lock(advice)
         self._apply_mowing_time_window(advice, weather_data, language)
         self._refresh_care_recommendation(advice, language)
-        should_save = should_save or history_saved or mower_saved or growth_saved
+        should_save = should_save or history_saved or mower_saved or growth_saved or season_saved
         if should_save:
             await self._store.async_save(self._stored_data)
         return advice
@@ -472,6 +479,9 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if mowing_safety_blocks(self.config, weather_data, "en"):
             return True
 
+        season_status = advice.get("growth_rate", {}).get("attributes", {}).get("mowing_season_status")
+        if season_status is not None and season_status != "ready":
+            return True
         entity_id = self.config.get(CONF_ROBOT_MOWER_ENTITY)
         if entity_id:
             state = self.hass.states.get(entity_id)
@@ -868,9 +878,12 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if _parse_datetime(item.get("time")) is not None
             and _parse_datetime(item["time"]) >= cutoff_weather_summary
         ]
+        seasonal_temperature, seasonal_coverage = _seasonal_temperature_summary(history, now)
         return (
             replace(
                 weather_data,
+                seasonal_temperature_72h=seasonal_temperature,
+                seasonal_temperature_coverage_hours=seasonal_coverage,
                 historical_temperature=_average(
                     item.get("temperature") for item in recent_weather_items
                 ),
@@ -889,6 +902,25 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ),
             should_save,
         )
+
+
+def _seasonal_temperature_summary(
+    history: list[dict[str, Any]], now: datetime
+) -> tuple[float | None, float]:
+    """Average hourly bins; require broad coverage before recommending storage."""
+    bins: dict[datetime, list[float]] = {}
+    for item in history:
+        item_time = _parse_datetime(item.get("time"))
+        temperature = _as_float(item.get("temperature"))
+        if item_time is None or temperature is None or not now - timedelta(hours=72) <= item_time <= now:
+            continue
+        hour = item_time.replace(minute=0, second=0, microsecond=0)
+        bins.setdefault(hour, []).append(temperature)
+    if not bins:
+        return None, 0.0
+    mean = _average(sum(values) / len(values) for values in bins.values())
+    coverage = (max(bins) - min(bins)).total_seconds() / 3600 if len(bins) >= 48 else 0.0
+    return mean, coverage
 
 
 def _as_float(value: Any) -> float | None:

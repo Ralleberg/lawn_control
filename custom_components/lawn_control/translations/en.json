@@ -253,6 +253,21 @@
           },
           "reason": {
             "name": "Reason"
+          },
+          "temperature": {
+            "name": "Current outdoor temperature"
+          },
+          "humidity": {
+            "name": "Air humidity"
+          },
+          "vapour_pressure_deficit_kpa": {
+            "name": "Vapour pressure deficit (kPa)"
+          },
+          "rain_deficit_weight": {
+            "name": "Rain deficit weight"
+          },
+          "soil_moisture": {
+            "name": "Measured soil moisture"
           }
         }
       },
@@ -279,6 +294,42 @@
           },
           "reason": {
             "name": "Reason"
+          },
+          "mowing_season_status": {
+            "name": "Mowing season status"
+          },
+          "mowing_season_label": {
+            "name": "Season message"
+          },
+          "mowing_season_reason": {
+            "name": "Season status reason"
+          },
+          "winter_storage_recommended": {
+            "name": "Winter storage recommended"
+          },
+          "temperature": {
+            "name": "Current outdoor temperature"
+          },
+          "historical_temperature": {
+            "name": "Temperature over the last day"
+          },
+          "growth_temperature": {
+            "name": "Temperature used for growth"
+          },
+          "temperature_growth_factor": {
+            "name": "Temperature growth factor"
+          },
+          "seasonal_temperature_72h": {
+            "name": "Temperature over the last three days"
+          },
+          "seasonal_temperature_coverage_hours": {
+            "name": "Temperature history coverage in hours"
+          },
+          "growth_stop_temperature": {
+            "name": "Mowing pause temperature threshold"
+          },
+          "growth_resume_temperature": {
+            "name": "Season start temperature threshold"
           }
         }
       },
@@ -325,6 +376,12 @@
           },
           "reason": {
             "name": "Reason"
+          },
+          "mowing_season_status": {
+            "name": "Mowing season status"
+          },
+          "winter_storage_recommended": {
+            "name": "Winter storage recommended"
           }
         }
       }
