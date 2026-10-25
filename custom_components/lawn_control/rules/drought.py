@@ -6,7 +6,11 @@ from math import exp
 from typing import TYPE_CHECKING, Any
 
 from ..const import CONF_SOIL_TYPE, CONF_WATER_DURING_DROUGHT, CONF_WATERING_LEVEL
-from .moisture import forecast_rain_threshold, historical_rain_threshold
+from .moisture import (
+    forecast_rain_threshold,
+    has_moisture_support,
+    historical_rain_threshold,
+)
 
 if TYPE_CHECKING:
     from ..coordinator import LawnWeatherData
@@ -45,7 +49,11 @@ def calculate_drought_risk(
     vpd = _observed_vapour_pressure_deficit(weather)
     # A heuristic atmospheric-demand weight, not an evapotranspiration model.
     drying_factor = min(1.5, max(0.25, vpd / 1.2)) if vpd is not None else 1.0
-    score += rain_deficit_score * drying_factor if rain_deficit_score > 0 else rain_deficit_score
+    score += (
+        rain_deficit_score * drying_factor
+        if rain_deficit_score > 0
+        else rain_deficit_score
+    )
 
     if temperature is not None and temperature >= 28:
         score += 25
@@ -80,7 +88,7 @@ def calculate_drought_risk(
     if weather.month in (6, 7, 8):
         score += 10
 
-    watering_reduction = _watering_reduction(config)
+    watering_reduction = _watering_reduction(config, weather)
     if watering_reduction:
         score -= watering_reduction
 
@@ -112,11 +120,12 @@ def calculate_drought_risk(
             "soil_moisture": weather.soil_moisture,
             "historical_rain": weather.historical_rain,
             "forecast_rain": forecast_rain,
-            "reason": text["reason"].format(score=score) + (
-                " " + text["low_evaporation"] if drying_factor < 1 else ""
-            ) + (
+            "reason": text["reason"].format(score=score)
+            + (" " + text["low_evaporation"] if drying_factor < 1 else "")
+            + (
                 " " + text["measured_dry"]
-                if weather.soil_moisture is not None and weather.soil_moisture < 25 else ""
+                if weather.soil_moisture is not None and weather.soil_moisture < 25
+                else ""
             ),
         },
     }
@@ -129,7 +138,12 @@ def _observed_vapour_pressure_deficit(weather: LawnWeatherData) -> float | None:
         (weather.temperature, weather.humidity),
         (weather.historical_temperature, weather.historical_humidity),
     ):
-        if temperature is None or humidity is None or not -80 <= temperature <= 60 or not 0 <= humidity <= 100:
+        if (
+            temperature is None
+            or humidity is None
+            or not -80 <= temperature <= 60
+            or not 0 <= humidity <= 100
+        ):
             continue
         saturation = 0.6108 * exp(17.27 * temperature / (temperature + 237.3))
         values.append(saturation * (1 - humidity / 100))
@@ -169,9 +183,11 @@ def _sun_stress(weather_state: str | None, forecast_condition: str | None) -> in
     return 0
 
 
-def _watering_reduction(config: dict[str, Any]) -> int:
+def _watering_reduction(config: dict[str, Any], weather: LawnWeatherData) -> int:
     """Return drought stress reduction from configured watering."""
-    if not config.get(CONF_WATER_DURING_DROUGHT):
+    if not config.get(CONF_WATER_DURING_DROUGHT) or not has_moisture_support(
+        config, weather
+    ):
         return 0
 
     level = config.get(CONF_WATERING_LEVEL, "normal")

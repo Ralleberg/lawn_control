@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
@@ -15,6 +14,10 @@ from .const import (
     CARE_LEVELS,
     CONF_CARE_LEVEL,
     CONF_DAILY_UPDATE_HOUR,
+    CONF_FERTILIZER_DOSE,
+    CONF_FERTILIZER_EFFECT_DAYS,
+    CONF_FERTILIZER_LABEL_DOSE,
+    CONF_FERTILIZER_TYPE,
     CONF_FORECAST_RAIN_DAYS,
     CONF_FORECAST_RAIN_THRESHOLD,
     CONF_HISTORICAL_RAIN_DAYS,
@@ -23,6 +26,7 @@ from .const import (
     CONF_LAWN_TYPE,
     CONF_MAX_GRASS_HEIGHT,
     CONF_MIN_GRASS_HEIGHT,
+    CONF_MOWING_START_HOUR,
     CONF_MOWING_UPDATE_FREQUENCY,
     CONF_RAIN_SENSOR,
     CONF_ROBOT_MOWER_ALLOW_NIGHT,
@@ -36,12 +40,14 @@ from .const import (
     CONF_WATERING_LEVEL,
     CONF_WEATHER_ENTITY,
     DEFAULT_DAILY_UPDATE_HOUR,
+    DEFAULT_FERTILIZER_EFFECT_DAYS,
     DEFAULT_FORECAST_RAIN_DAYS,
     DEFAULT_FORECAST_RAIN_THRESHOLD,
     DEFAULT_HISTORICAL_RAIN_DAYS,
     DEFAULT_HISTORICAL_RAIN_THRESHOLD,
     DEFAULT_MAX_GRASS_HEIGHT,
     DEFAULT_MIN_GRASS_HEIGHT,
+    DEFAULT_MOWING_START_HOUR,
     DEFAULT_MOWING_UPDATE_FREQUENCY,
     DOMAIN,
     LAWN_TYPES,
@@ -62,9 +68,7 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             vol.Required(
                 CONF_WEATHER_ENTITY,
                 default=defaults.get(CONF_WEATHER_ENTITY),
-            ): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="weather")
-            ),
+            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="weather")),
             vol.Optional(
                 CONF_TEMPERATURE_SENSOR,
                 **_default_kwargs(defaults, CONF_TEMPERATURE_SENSOR),
@@ -102,8 +106,61 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             ),
             vol.Required(
                 CONF_ROBOT_MOWER_ALLOW_NIGHT,
-                default=defaults.get(CONF_ROBOT_MOWER_ALLOW_NIGHT, True),
+                default=defaults.get(CONF_ROBOT_MOWER_ALLOW_NIGHT, False),
             ): selector.BooleanSelector(),
+            vol.Required(
+                CONF_MOWING_START_HOUR,
+                default=defaults.get(CONF_MOWING_START_HOUR, DEFAULT_MOWING_START_HOUR),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, max=23, step=1, unit_of_measurement="h"
+                )
+            ),
+            vol.Required(
+                CONF_FERTILIZER_TYPE,
+                default=defaults.get(CONF_FERTILIZER_TYPE, "regular"),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=["regular", "autumn"], translation_key=CONF_FERTILIZER_TYPE
+                )
+            ),
+            vol.Required(
+                CONF_FERTILIZER_EFFECT_DAYS,
+                default=defaults.get(
+                    CONF_FERTILIZER_EFFECT_DAYS, DEFAULT_FERTILIZER_EFFECT_DAYS
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=7,
+                    max=180,
+                    step=1,
+                    unit_of_measurement="d",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Optional(
+                CONF_FERTILIZER_DOSE, **_default_kwargs(defaults, CONF_FERTILIZER_DOSE)
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0,
+                    max=200,
+                    step=0.5,
+                    unit_of_measurement="g/m²",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Optional(
+                CONF_FERTILIZER_LABEL_DOSE,
+                **_default_kwargs(defaults, CONF_FERTILIZER_LABEL_DOSE),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0,
+                    max=200,
+                    step=0.5,
+                    unit_of_measurement="g/m²",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
             vol.Required(
                 CONF_MOWING_UPDATE_FREQUENCY,
                 default=defaults.get(
@@ -119,9 +176,7 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             ),
             vol.Required(
                 CONF_DAILY_UPDATE_HOUR,
-                default=defaults.get(
-                    CONF_DAILY_UPDATE_HOUR, DEFAULT_DAILY_UPDATE_HOUR
-                ),
+                default=defaults.get(CONF_DAILY_UPDATE_HOUR, DEFAULT_DAILY_UPDATE_HOUR),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
                     min=0,
@@ -221,9 +276,7 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             ),
             vol.Required(
                 CONF_MIN_GRASS_HEIGHT,
-                default=defaults.get(
-                    CONF_MIN_GRASS_HEIGHT, DEFAULT_MIN_GRASS_HEIGHT
-                ),
+                default=defaults.get(CONF_MIN_GRASS_HEIGHT, DEFAULT_MIN_GRASS_HEIGHT),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
                     min=15, max=100, step=1, unit_of_measurement="mm"
@@ -231,9 +284,7 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             ),
             vol.Required(
                 CONF_MAX_GRASS_HEIGHT,
-                default=defaults.get(
-                    CONF_MAX_GRASS_HEIGHT, DEFAULT_MAX_GRASS_HEIGHT
-                ),
+                default=defaults.get(CONF_MAX_GRASS_HEIGHT, DEFAULT_MAX_GRASS_HEIGHT),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
                     min=20, max=120, step=1, unit_of_measurement="mm"
@@ -272,14 +323,15 @@ def _sensor_selector() -> selector.EntitySelector:
 def _clean_user_input(user_input: dict[str, Any]) -> dict[str, Any]:
     """Remove empty optional fields and make defaults explicit."""
     cleaned = {
-        key: value
-        for key, value in user_input.items()
-        if value not in (None, "")
+        key: value for key, value in user_input.items() if value not in (None, "")
     }
     cleaned.setdefault(CONF_ROBOTIC_MOWER, False)
-    cleaned.setdefault(CONF_ROBOT_MOWER_ALLOW_NIGHT, True)
+    cleaned.setdefault(CONF_ROBOT_MOWER_ALLOW_NIGHT, False)
     cleaned.setdefault(CONF_MOWING_UPDATE_FREQUENCY, DEFAULT_MOWING_UPDATE_FREQUENCY)
     cleaned.setdefault(CONF_DAILY_UPDATE_HOUR, DEFAULT_DAILY_UPDATE_HOUR)
+    cleaned.setdefault(CONF_MOWING_START_HOUR, DEFAULT_MOWING_START_HOUR)
+    cleaned.setdefault(CONF_FERTILIZER_TYPE, "regular")
+    cleaned.setdefault(CONF_FERTILIZER_EFFECT_DAYS, DEFAULT_FERTILIZER_EFFECT_DAYS)
     cleaned.setdefault(
         CONF_HISTORICAL_RAIN_THRESHOLD, DEFAULT_HISTORICAL_RAIN_THRESHOLD
     )
@@ -323,6 +375,27 @@ def _rain_setting_errors(user_input: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def _care_setting_errors(user_input: dict[str, Any]) -> dict[str, str]:
+    errors = {}
+    if not _is_valid_hour(user_input.get(CONF_MOWING_START_HOUR)):
+        errors[CONF_MOWING_START_HOUR] = "invalid_hour"
+    if user_input.get(CONF_FERTILIZER_TYPE) not in ("regular", "autumn"):
+        errors[CONF_FERTILIZER_TYPE] = "invalid_fertilizer_setting"
+    if not _is_whole_number_in_range(
+        user_input.get(CONF_FERTILIZER_EFFECT_DAYS), 7, 180
+    ):
+        errors[CONF_FERTILIZER_EFFECT_DAYS] = "invalid_fertilizer_setting"
+    for key in (CONF_FERTILIZER_DOSE, CONF_FERTILIZER_LABEL_DOSE):
+        value = user_input.get(key)
+        if value is not None and (
+            not isinstance(value, int | float)
+            or isinstance(value, bool)
+            or not 0 <= value <= 200
+        ):
+            errors[key] = "invalid_fertilizer_setting"
+    return errors
+
+
 class LawnControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Lawn Control."""
 
@@ -337,6 +410,7 @@ class LawnControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             user_input = _clean_user_input(user_input)
             errors.update(_rain_setting_errors(user_input))
+            errors.update(_care_setting_errors(user_input))
             if user_input[CONF_MIN_GRASS_HEIGHT] >= user_input[CONF_MAX_GRASS_HEIGHT]:
                 errors["base"] = "height_range"
             elif not _is_valid_mowing_update_frequency(
@@ -383,6 +457,7 @@ class LawnControlOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             user_input = _clean_user_input(user_input)
             errors.update(_rain_setting_errors(user_input))
+            errors.update(_care_setting_errors(user_input))
             if user_input[CONF_MIN_GRASS_HEIGHT] >= user_input[CONF_MAX_GRASS_HEIGHT]:
                 errors["base"] = "height_range"
             elif not _is_valid_mowing_update_frequency(

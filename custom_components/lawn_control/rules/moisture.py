@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 from ..const import (
     CONF_FORECAST_RAIN_THRESHOLD,
     CONF_HISTORICAL_RAIN_THRESHOLD,
-    CONF_WATER_DURING_DROUGHT,
     DEFAULT_FORECAST_RAIN_THRESHOLD,
     DEFAULT_HISTORICAL_RAIN_THRESHOLD,
 )
@@ -23,16 +22,9 @@ def has_moisture_support(config: dict[str, Any], weather: LawnWeatherData) -> bo
     if weather.soil_moisture is not None:
         return weather.soil_moisture >= SOIL_MOISTURE_OK
 
-    if config.get(CONF_WATER_DURING_DROUGHT):
-        return True
-
+    # Future rain and a watering preference are not water already in the soil.
     historical_rain = _rain_value(weather.historical_rain)
-    forecast_rain = _rain_value(weather.forecast_rain_5_days)
-    return (
-        historical_rain >= historical_rain_threshold(config)
-        or forecast_rain >= forecast_rain_threshold(config)
-        or rain_moisture_total(weather) >= rain_moisture_threshold(config)
-    )
+    return historical_rain >= historical_rain_threshold(config)
 
 
 def rain_moisture_total(weather: LawnWeatherData) -> float:
@@ -84,10 +76,9 @@ def moisture_status(
             else text["missing"]
         )
 
-    if config.get(CONF_WATER_DURING_DROUGHT):
-        return text["watering"]
-
-    return text["supported"] if has_moisture_support(config, weather) else text["missing"]
+    return (
+        text["supported"] if has_moisture_support(config, weather) else text["missing"]
+    )
 
 
 def _rain_value(value: float | None) -> float:

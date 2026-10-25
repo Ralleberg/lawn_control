@@ -5,6 +5,7 @@ import __future__
 import ast
 import importlib.util
 import json
+import math
 import sys
 import types
 import unittest
@@ -36,6 +37,7 @@ maintenance = sys.modules[f"{PACKAGE}.rules.maintenance"]
 
 def weather(**updates):
     values = dict(
+        unavailable_required_entities=(), unavailable_optional_entities=(),
         month=5, day=1, seasonal_temperature_72h=None,
         seasonal_temperature_coverage_hours=0, temperature=18, humidity=60, weather_state="cloudy",
         forecast_condition="cloudy", recent_rain=0, recent_hour_rain=0,
@@ -43,6 +45,8 @@ def weather(**updates):
         forecast_rain_5_days=0, forecast_rain_next_24h=0,
         forecast_drying_pressure_72h=0, soil_moisture=40,
         historical_temperature=18, historical_humidity=60, sun_is_up=True,
+        historical_temperature_coverage_hours=24, forecast_temperature_72h=15,
+        forecast_min_temperature_72h=8, forecast_temperature_coverage_hours=72,
     )
     values.update(updates)
     return SimpleNamespace(**values)
@@ -154,7 +158,8 @@ class LawnRulesTest(unittest.TestCase):
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "LawnControlCoordinator")
         method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "_robot_catch_up_hard_blocked")
         namespace = dict(Any=object, LawnWeatherData=object,
-                         mowing_safety_blocks=mowing.mowing_safety_blocks)
+                         mowing_safety_blocks=mowing.mowing_safety_blocks,
+                         lacks_moisture_support=moisture.lacks_moisture_support)
         exec(compile(ast.Module(body=[method], type_ignores=[]), "coordinator.py", "exec", flags=__future__.annotations.compiler_flag), namespace)
         coordinator = SimpleNamespace(config={"water_during_drought": True})
         for conditions in (dict(month=11), dict(weather_state="snowy"), dict(soil_moisture=10)):
@@ -206,7 +211,8 @@ class LawnRulesTest(unittest.TestCase):
         result = care.build_advice({"robotic_mower": True}, weather(weather_state="rainy"), "en")
         self.assertEqual(result["growth_rate"]["attributes"]["mowing_season_status"], "ready")
         self.assertFalse(result["robot_mower_should_run"]["value"])
-        self.assertIn("Ready for the mowing season", result["care_recommendation"]["value"])
+        self.assertIn("Wait before mowing", result["care_recommendation"]["value"])
+        self.assertNotIn("mowing season", result["care_recommendation"]["value"])
 
     def test_missing_temperature_is_not_reported_as_ready(self):
         result = care.build_advice({"robotic_mower": True}, weather(
@@ -248,7 +254,7 @@ class LawnRulesTest(unittest.TestCase):
         tree = ast.parse((ROOT / "coordinator.py").read_text())
         names = {"_seasonal_temperature_summary", "_average", "_as_float", "_growth_total_since"}
         methods = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in names]
-        namespace = dict(Any=object, datetime=datetime, timedelta=timedelta,
+        namespace = dict(Any=object, math=math, datetime=datetime, timedelta=timedelta,
                          _parse_datetime=lambda value: datetime.fromisoformat(value) if value else None)
         exec(compile(ast.Module(body=methods, type_ignores=[]), "coordinator.py", "exec", flags=__future__.annotations.compiler_flag), namespace)
         now = datetime(2026, 10, 12, 12)

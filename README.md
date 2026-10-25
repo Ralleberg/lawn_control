@@ -111,8 +111,12 @@ The setup wizard guides you through configuring the integration.
 - Every 6 hours
 - Once per day, using the configured daily assessment hour
 
-When mowing at night is disabled, the daily assessment hour is also the earliest
-time of day where mowing can be recommended as `true`.
+This setting controls advice refreshes, not cuts per week. The new recommended
+mowing frequency sensor reports the actual suggested cutting cadence.
+`mowing_start_hour` independently sets the earliest start (09:00 by default),
+including when night mowing is enabled. `daily_update_hour` only anchors daily
+advice refreshes. New setups disable night mowing by default; existing explicit
+night preferences are preserved.
 
 ## Fertilizer
 
@@ -129,6 +133,12 @@ The latest fertilizer date is managed through the `date.lawn_last_fertilized_dat
 entity after setup. Update these entities directly from Home Assistant whenever
 fertilizer is applied or the fertilizer composition changes.
 
+Options also include `fertilizer_type` (`regular` or `autumn`), the label's effect
+period in days, the last applied dose and the product label dose in g/m². Fill in
+known values from the product. Missing application data produces an unavailable
+fertilizer assessment and an explanation, rather than an automatic recommendation.
+The default 60-day effect period is editable and must be checked against the label.
+
 ---
 
 # Entities
@@ -137,6 +147,9 @@ fertilizer is applied or the fertilizer composition changes.
 |----------|-------------|
 | `sensor.lawn_recommended_grass_height` | Recommended grass height with detailed decision attributes. |
 | `sensor.lawn_drought_risk` | Current drought risk and score details. |
+| `sensor.lawn_recommended_mowing_frequency` | Recommended mowing days per week, with minimum intervals and guidance. |
+| `number.lawn_estimated_grass_height` | Expected height model; enter an initial estimate if needed. |
+| `date.lawn_last_mowed_date` | Register a manual cut using the recommended height; created for conventional mowers. |
 | `sensor.lawn_growth_rate` | Estimated grass growth including fertilizer and weather effects. |
 | `sensor.lawn_fertilizer_score` | Remaining fertilizer effectiveness from 0–100. |
 | `sensor.lawn_historical_rain` | Historical rainfall used by the rule engine. |
@@ -258,12 +271,13 @@ temperature thresholds, not measured soil temperatures or universal biological
 limits. Estimated current grass height and recommended cutting height remain
 separate concepts; monthly minimum cutting heights still apply.
 
-### Season status on existing entities
+### Temperature status on existing entities
 
 The growth sensor now exposes `mowing_season_status`, `mowing_season_label`,
 `mowing_season_reason` and `winter_storage_recommended`. The care recommendation
-also shows the seasonal message, so an existing card using that entity can show
-storage advice and season readiness without an additional entity.
+shows a pause or storage message when relevant. Passing the temperature check
+adds no generic readiness sentence; the overview describes concrete actions and
+wait reasons. Existing attribute keys remain compatible.
 
 | Status | Meaning |
 |--------|---------|
@@ -279,7 +293,7 @@ Autumn storage advice in September–October requires a three-day mean at or bel
 6 °C, at least 48 distinct hourly samples spanning 70 hours, and current cold
 conditions. The mean and coverage are exposed as `seasonal_temperature_72h` and
 `seasonal_temperature_coverage_hours`. Sparse history cannot trigger early storage.
-The seasonal message reports temperature readiness, not permission to run today:
+The temperature message does not by itself permit mowing today:
 night restrictions, rain, drought and insufficient growth can still prevent mowing.
 
 For a Markdown dashboard card, the existing growth sensor's message can be shown
@@ -296,16 +310,25 @@ Growth depends on:
 
 ## Fertilizer
 
-The fertilizer score estimates remaining fertilizer age effect using:
+Fertilizer assessment separates estimated residual product effect, suitable
+conditions and actual nutrient need. A score of zero does not establish a
+nutrient deficiency. Scores remain unavailable until the previous application,
+nitrogen percentage and applied/label doses are known. The label effect period
+must elapse before another application can be considered, even if a small dose
+produces a low residual score sooner.
 
-- Fertilizer age
-- Whether the configured fertilizer contains nitrogen
+Regular fertilizer is considered in March–September; autumn products require an
+explicit product selection and September–October. Both require normal or fast
+growth, moist soil or sufficient observed rain, sufficient temperature history
+(at least 18 hourly bins in the last day), and a temperature forecast covering at
+least 48 hours of the next 72. Upcoming cold, frost, drought, strong heat and heavy
+rain block a positive assessment. These are conservative advisory thresholds.
 
-Fertilizer-driven growth bonus also considers:
-
-- NPK composition
-- Nitrogen strength
-- Moisture availability
+A positive result means fertilizer **can be considered if needed**, following the
+product label. `need_confirmed` remains false: the integration does not measure
+soil nutrients. Reasons and missing information are exposed on both fertilizer
+entities and the care overview. Fertilizer growth bonuses use the same configured
+product interval and dose, with NPK composition and observed moisture support.
 
 ## Mowing
 
@@ -323,14 +346,47 @@ preference cannot override measured dry soil. Robot catch-up obeys these same
 protections. Cold or dormant grass stays at zero estimated growth even when
 fertilizer or favorable weather would otherwise add a growth bonus.
 
-Use sharp blades, avoid wet grass and morning dew, distribute or collect clumps
-of clippings, and vary mowing routes to reduce wheel tracks. Prefer robot starts
-after 09:00 when dew is a concern; the existing start-hour and night preferences
-remain configurable. In autumn, keep a high final cutting setting and remove
-thick layers of leaves. During drought, pause mowing; watering is optional and,
-if used, should be infrequent and deep (about 20 mm per application).
+Robot starts default to 09:00. Current humidity at or above 95% is treated as a
+possible dew warning; yesterday's humidity alone does not block today's mowing.
+Humidity is only a proxy: inspect the grass when conditions are uncertain.
+Use sharp blades, collect or distribute clumps and vary mowing routes. Relevant
+maintenance reminders are included in advice attributes. October keeps the high
+end of the recommended range for the final cut, with leaf removal guidance.
 
-The mowing recommendation is locked for the configured frequency: every hour, every 4 hours, every 6 hours, or once per day at the configured daily assessment hour. Live blocking factors immediately suspend a locked recommendation, and its recommended height always follows the current protected height. When mowing at night is disabled, mowing is forced off between sunset and sunrise and before the configured daily assessment hour.
+After observed high or critical drought risk, a persisted recovery plan keeps
+the setting at least 60 mm during the first week of resumed active growth, then
+at least 50 mm during the second week. Weather and one-third protections still
+apply. Watering preferences describe a practice, not proof that watering occurred;
+future rain cannot satisfy today's moisture requirement.
+
+At good growth, the robot recommendation is daily in May–September and three
+days per week in March, April and October. Conventional mowing targets two cuts
+per week at normal growth and three at fast growth. Slow growth suggests at most
+one cut per week, only when the expected height justifies it. Recorded cuts enforce
+the suggested minimum interval. Without a registered cut, frequency is guidance
+rather than confirmation that mowing occurred.
+
+The height model assumes the recommended setting is followed, then adds estimated
+growth. A completed robot run continues to use that recommended setting. Manual
+cuts can be registered through the date entity. An optional initial expected height
+can be entered through the number entity; this does not register a completed cut.
+Gradual cutting plans respect the one-third limit and allow at least two days
+between height reductions. Long-running height estimates retain accumulated growth
+when older hourly history is pruned.
+
+The mowing recommendation is locked for the configured frequency: every hour, every 4 hours, every 6 hours, or once per day at the configured daily assessment hour. Live blocking factors immediately suspend a locked recommendation, and its recommended height always follows the current protected height. The independent start-hour check always applies. When night mowing is disabled, sunset-to-sunrise mowing is also blocked.
+
+### Weather data quality
+
+Forecast amounts are summed over timestamped windows, prorating partially
+overlapping periods and ignoring expired or duplicate entries. Hourly forecasts
+are preferred for drying pressure. Untimestamped forecasts cannot establish a
+future window. Values are converted from Fahrenheit/Kelvin and inches when the
+source declares those units; incompatible units and non-finite values are rejected.
+Forecast precipitation amounts are used as reported, without multiplying them by
+precipitation probability again. Soil moisture percentages require a suitable,
+calibrated sensor. When available, `last_reported` detects measurements older than
+six hours; a constant but freshly reported value remains valid.
 
 ## Robot Mower
 
@@ -368,7 +424,7 @@ Lawn Control is intended to work together with Home Assistant automations.
 Typical examples include:
 
 - Pause a robot mower when mowing is not recommended.
-- Notify when fertilizing conditions are ideal.
+- Notify when fertilizer can be considered, subject to product instructions and lawn need.
 - Trigger irrigation when drought risk becomes critical.
 - Display lawn recommendations on dashboards.
 - Schedule mowing only on suitable days.

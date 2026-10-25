@@ -11,11 +11,16 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import CONF_ROBOTIC_MOWER, DOMAIN
 from .coordinator import LawnControlCoordinator
 
-
 DATE_ENTITIES: tuple[DateEntityDescription, ...] = (
+    DateEntityDescription(
+        key="last_mowed_date",
+        translation_key="last_mowed_date",
+        name="Lawn Last Mowed Date",
+        icon="mdi:calendar-check",
+    ),
     DateEntityDescription(
         key="last_fertilized_date",
         translation_key="last_fertilized_date",
@@ -35,6 +40,8 @@ async def async_setup_entry(
     async_add_entities(
         LawnControlDateEntity(coordinator, entry, description)
         for description in DATE_ENTITIES
+        if description.key != "last_mowed_date"
+        or not coordinator.config.get(CONF_ROBOTIC_MOWER)
     )
 
 
@@ -64,8 +71,13 @@ class LawnControlDateEntity(CoordinatorEntity[LawnControlCoordinator], DateEntit
     @property
     def native_value(self) -> date | None:
         """Return the configured date."""
+        if self.entity_description.key == "last_mowed_date":
+            return self.coordinator.last_mowed_date
         return self.coordinator.last_fertilized_date
 
     async def async_set_value(self, value: date) -> None:
         """Set the latest fertilizer date."""
-        await self.coordinator.async_set_last_fertilized_date(value)
+        if self.entity_description.key == "last_mowed_date":
+            await self.coordinator.async_set_last_mowed_date(value)
+        else:
+            await self.coordinator.async_set_last_fertilized_date(value)

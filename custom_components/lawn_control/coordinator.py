@@ -26,6 +26,7 @@ from .const import (
     CONF_HISTORICAL_RAIN_DAYS,
     CONF_HUMIDITY_SENSOR,
     CONF_LAST_FERTILIZED_DATE,
+    CONF_MOWING_START_HOUR,
     CONF_MOWING_UPDATE_FREQUENCY,
     CONF_RAIN_SENSOR,
     CONF_ROBOT_MOWER_ALLOW_NIGHT,
@@ -37,14 +38,25 @@ from .const import (
     DEFAULT_DAILY_UPDATE_HOUR,
     DEFAULT_FORECAST_RAIN_DAYS,
     DEFAULT_HISTORICAL_RAIN_DAYS,
+    DEFAULT_MOWING_START_HOUR,
     DEFAULT_MOWING_UPDATE_FREQUENCY,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     FERTILIZER_PERCENT_CONFIGS,
     MOWING_UPDATE_FREQUENCIES,
 )
+from .forecasts import (
+    _forecast_drying_pressure,
+    _forecast_precipitation,
+    _forecast_precipitation_days,
+    _forecast_precipitation_next_hours,
+    forecast_temperature,
+    normalize_forecast,
+    normalize_value,
+)
 from .rules.care import build_advice, general_recommendation
-from .rules.mowing import mowing_safety_blocks, protect_cut_height
+from .rules.moisture import lacks_moisture_support
+from .rules.mowing import gradual_cut_plan, mowing_safety_blocks, protect_cut_height
 
 LOGGER = logging.getLogger(__name__)
 
@@ -52,7 +64,7 @@ STORAGE_VERSION = 1
 WEATHER_HISTORY_HOURS = 24
 MAX_WEATHER_HISTORY_KEEP_DAYS = 10
 GROWTH_HISTORY_KEEP_DAYS = 21
-MOWING_LOCK_VERSION = 6
+MOWING_LOCK_VERSION = 7
 ROBOT_CATCH_UP_TRIGGER_MM = 3.0
 ROBOT_CATCH_UP_COOLDOWN = timedelta(hours=48)
 ROBOT_MOWER_MOWING_STATE = "mowing"
@@ -85,6 +97,10 @@ class LawnWeatherData:
     unavailable_required_entities: tuple[str, ...]
     unavailable_optional_entities: tuple[str, ...]
     month: int
+    historical_temperature_coverage_hours: float = 0.0
+    forecast_temperature_72h: float | None = None
+    forecast_min_temperature_72h: float | None = None
+    forecast_temperature_coverage_hours: float = 0.0
     day: int = 1
     seasonal_temperature_72h: float | None = None
     seasonal_temperature_coverage_hours: float = 0.0
@@ -122,7 +138,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.hass,
                 _configured_source_entities(self.config),
                 self._async_refresh_from_source_change,
-            )
+            ),
         ]
 
     async def async_shutdown(self) -> None:
@@ -167,9 +183,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         last_fertilized_date = self._last_fertilized_date_string(config)
         if last_fertilized_date is not None:
             config[CONF_LAST_FERTILIZED_DATE] = last_fertilized_date
-        days_since_fertilizer = _days_since_date(
-            last_fertilized_date, dt_util.now()
-        )
+        days_since_fertilizer = _days_since_date(last_fertilized_date, dt_util.now())
         if days_since_fertilizer is not None:
             config[CONF_DAYS_SINCE_FERTILIZER] = days_since_fertilizer
         return config
@@ -189,7 +203,49 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def async_set_last_fertilized_date(self, value: date) -> None:
         """Persist a new latest fertilizer date from the date entity."""
+        if value > dt_util.now().date():
+            raise ValueError("Fertilizer date cannot be in the future")
         self._stored_data[CONF_LAST_FERTILIZED_DATE] = value.isoformat()
+        await self._store.async_save(self._stored_data)
+        await self.async_request_refresh()
+
+    @property
+    def last_mowed_date(self) -> date | None:
+        tracker = self._stored_data.get("manual_mower", {})
+        value = _parse_datetime(tracker.get("last_mowed_at"))
+        return value.date() if value else None
+
+    async def async_set_last_mowed_date(self, value: date) -> None:
+        if value > dt_util.now().date():
+            raise ValueError("Mowing date cannot be in the future")
+        height = self.data["recommended_grass_height"]["value"]
+        moment = dt_util.now().replace(
+            year=value.year, month=value.month, day=value.day
+        )
+        self._stored_data["manual_mower"] = {
+            "last_mowed_at": moment.isoformat(),
+            "last_mowed_height": height,
+        }
+        await self._store.async_save(self._stored_data)
+        await self.async_request_refresh()
+
+    @property
+    def estimated_grass_height(self) -> float | None:
+        return self._robot_mower_status_data(self.data or {}).get(
+            "estimated_grass_height"
+        )
+
+    async def async_set_estimated_grass_height(self, value: float) -> None:
+        height = _as_float(value)
+        if height is None or not 15 <= height <= 300:
+            raise ValueError("Expected grass height must be between 15 and 300 mm")
+        key = "robot_mower" if self.config.get(CONF_ROBOTIC_MOWER) else "manual_mower"
+        tracker = self._stored_data.setdefault(key, {})
+        tracker.update(
+            height_reference_at=dt_util.now().isoformat(), height_reference=height
+        )
+        if key == "robot_mower":
+            tracker["entity_id"] = self.config.get(CONF_ROBOT_MOWER_ENTITY)
         await self._store.async_save(self._stored_data)
         await self.async_request_refresh()
 
@@ -276,23 +332,33 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         weather_data, history_saved = self._update_weather_history(weather_data)
         language = getattr(self.hass.config, "language", "en")
         previous_season_status = self._stored_data.get("mowing_season_status")
-        advice = build_advice(self.config, weather_data, language, previous_season_status)
+        advice = build_advice(
+            self.config, weather_data, language, previous_season_status
+        )
         season_status = advice["growth_rate"]["attributes"]["mowing_season_status"]
         season_saved = season_status != previous_season_status
         if season_saved:
             self._stored_data["mowing_season_status"] = season_status
         advice["availability"] = _availability_data(weather_data)
-        mower_saved = self._update_robot_mower_tracking(advice)
         growth_saved = self._update_growth_history(advice)
         mower_status = self._robot_mower_status_data(advice)
-        if self.config.get(CONF_ROBOTIC_MOWER):
-            protect_cut_height(
-                advice["recommended_grass_height"],
-                _as_float(mower_status.get("estimated_grass_height")),
-                language,
+        recovery_saved = self._apply_drought_recovery(advice, language)
+        target_height = advice["recommended_grass_height"]["value"]
+        estimated_height = _as_float(mower_status.get("estimated_grass_height"))
+        if estimated_height is not None:
+            advice["recommended_grass_height"]["attributes"]["gradual_cut_plan_mm"] = (
+                gradual_cut_plan(estimated_height, target_height)
             )
+        protect_cut_height(
+            advice["recommended_grass_height"], estimated_height, language
+        )
+        mower_saved = self._update_robot_mower_tracking(advice)
+        if mower_saved:
+            mower_status = self._robot_mower_status_data(advice)
         for key in ("should_mow", "robot_mower_should_run"):
-            advice[key]["attributes"]["recommended_height"] = advice["recommended_grass_height"]["value"]
+            advice[key]["attributes"]["recommended_height"] = advice[
+                "recommended_grass_height"
+            ]["value"]
         self._apply_robot_mower_status_attributes(advice, mower_status)
         self._apply_robot_mower_catch_up(
             advice,
@@ -300,10 +366,18 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             language,
             mower_status,
         )
+        self._apply_mowing_cadence(advice, mower_status, language)
         advice, should_save = self._apply_mowing_frequency_lock(advice)
         self._apply_mowing_time_window(advice, weather_data, language)
         self._refresh_care_recommendation(advice, language)
-        should_save = should_save or history_saved or mower_saved or growth_saved or season_saved
+        should_save = (
+            should_save
+            or history_saved
+            or mower_saved
+            or growth_saved
+            or season_saved
+            or recovery_saved
+        )
         if should_save:
             await self._store.async_save(self._stored_data)
         return advice
@@ -340,6 +414,8 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         ):
             tracker["last_mowed_at"] = now.isoformat()
             tracker["last_mowed_height"] = advice["recommended_grass_height"]["value"]
+            tracker.pop("height_reference_at", None)
+            tracker.pop("height_reference", None)
             tracker.pop("mowing_started_at", None)
 
         if tracker != original_tracker:
@@ -351,7 +427,9 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _update_growth_history(self, advice: dict[str, Any]) -> bool:
         """Store hourly grass growth estimates for later mower catch-up decisions."""
         availability = advice.get("availability", {})
-        if not availability.get("source_entities_available", True):
+        if not availability.get("source_entities_available", True) or not advice[
+            "growth_rate"
+        ]["attributes"].get("estimate_known", True):
             return False
 
         growth_rate = _as_float(
@@ -369,12 +447,42 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             original_history = []
 
         cutoff = now - timedelta(days=GROWTH_HISTORY_KEEP_DAYS)
+        for tracker_key in ("robot_mower", "manual_mower"):
+            tracker = self._stored_data.get(tracker_key)
+            if not isinstance(tracker, dict):
+                continue
+            reference = _parse_datetime(
+                tracker.get("height_reference_at") or tracker.get("last_mowed_at")
+            )
+            baseline = _as_float(
+                tracker.get("height_reference")
+                if tracker.get("height_reference_at")
+                else tracker.get("last_mowed_height")
+            )
+            if reference is not None and baseline is not None and reference < cutoff:
+                accumulated = _growth_total_since(original_history, reference, cutoff)
+                if accumulated is not None:
+                    tracker.update(
+                        height_reference_at=cutoff.isoformat(),
+                        height_reference=round(baseline + accumulated, 1),
+                    )
         history = [
             item
             for item in original_history
             if _parse_datetime(item.get("time")) is not None
             and _parse_datetime(item["time"]) >= cutoff
         ]
+        older = [
+            item
+            for item in original_history
+            if (moment := _parse_datetime(item.get("time"))) is not None
+            and moment < cutoff
+        ]
+        if older and (not history or _parse_datetime(history[0]["time"]) > cutoff):
+            anchor = max(older, key=lambda item: _parse_datetime(item["time"]))
+            history.insert(
+                0, {"time": cutoff.isoformat(), "growth": anchor.get("growth")}
+            )
         sample = {"time": sample_time.isoformat(), "growth": growth_rate}
         if history and history[-1].get("time") == sample["time"]:
             history[-1] = sample
@@ -425,6 +533,8 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         attributes = robot_advice.setdefault("attributes", {})
+        # Only limited growth is eligible for this exception. All environmental
+        # checks were retained in safety_blocking_factors and must be clear.
         attributes["blocking_factors"] = []
         attributes["catch_up"] = True
         attributes["reason"] = _robot_catch_up_text(language)
@@ -433,24 +543,36 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _robot_mower_status_data(self, advice: dict[str, Any]) -> dict[str, Any]:
         """Return tracked robot mower data for entity attributes and catch-up."""
         status: dict[str, Any] = {"catch_up": False}
-        tracker = self._stored_data.get("robot_mower")
+        tracker_key = (
+            "robot_mower" if self.config.get(CONF_ROBOTIC_MOWER) else "manual_mower"
+        )
+        tracker = self._stored_data.get(tracker_key)
         if not isinstance(tracker, dict):
             return status
 
         last_mowed_at = _parse_datetime(tracker.get("last_mowed_at"))
         last_mowed_height = _as_float(tracker.get("last_mowed_height"))
-        if last_mowed_at is None or last_mowed_height is None:
+        reference_at = (
+            _parse_datetime(tracker.get("height_reference_at")) or last_mowed_at
+        )
+        reference_height = (
+            _as_float(tracker.get("height_reference"))
+            if tracker.get("height_reference_at")
+            else last_mowed_height
+        )
+        if last_mowed_at is not None:
+            status["last_registered_run"] = last_mowed_at.isoformat()
+        if reference_at is None or reference_height is None:
             return status
-
-        status["last_registered_run"] = last_mowed_at.isoformat()
+        status["height_reference_at"] = reference_at.isoformat()
         growth_since_mowed = _growth_total_since(
             self._stored_data.get("growth_history", []),
-            last_mowed_at,
+            reference_at,
             dt_util.now(),
         )
         if growth_since_mowed is not None:
             status["estimated_grass_height"] = round(
-                last_mowed_height + growth_since_mowed,
+                reference_height + growth_since_mowed,
                 1,
             )
 
@@ -478,8 +600,20 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Return whether catch-up mowing must remain blocked."""
         if mowing_safety_blocks(self.config, weather_data, "en"):
             return True
+        if lacks_moisture_support(self.config, weather_data):
+            return True
+        if (
+            advice.get("robot_mower_should_run", {})
+            .get("attributes", {})
+            .get("safety_blocking_factors")
+        ):
+            return True
 
-        season_status = advice.get("growth_rate", {}).get("attributes", {}).get("mowing_season_status")
+        season_status = (
+            advice.get("growth_rate", {})
+            .get("attributes", {})
+            .get("mowing_season_status")
+        )
         if season_status is not None and season_status != "ready":
             return True
         entity_id = self.config.get(CONF_ROBOT_MOWER_ENTITY)
@@ -489,12 +623,17 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return True
 
         if (
-            not self.config.get(CONF_ROBOT_MOWER_ALLOW_NIGHT, True)
+            not self.config.get(CONF_ROBOT_MOWER_ALLOW_NIGHT, False)
             and weather_data.sun_is_up is not True
         ):
             return True
 
-        if weather_data.weather_state in ("rainy", "pouring", "lightning-rainy", "hail"):
+        if weather_data.weather_state in (
+            "rainy",
+            "pouring",
+            "lightning-rainy",
+            "hail",
+        ):
             return True
 
         if (
@@ -512,6 +651,106 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         return temperature is not None and temperature < 6
 
+    def _apply_drought_recovery(self, advice: dict[str, Any], language: str) -> bool:
+        """Keep recovery at 60 mm, then 50 mm, before returning to normal."""
+        previous = deepcopy(self._stored_data.get("drought_recovery", {}))
+        recovery = deepcopy(previous)
+        if advice["drought_risk"]["value"] in ("high", "critical"):
+            recovery = {"pending": True}
+        elif recovery.get("pending") and advice["growth_rate"]["value"] in (
+            "normal",
+            "fast",
+        ):
+            recovery = {"started_at": dt_util.now().isoformat()}
+        started = _parse_datetime(recovery.get("started_at"))
+        if recovery:
+            days = (dt_util.now() - started).total_seconds() / 86400 if started else 0
+            if days >= 14:
+                recovery = {}
+            else:
+                minimum = 60 if days < 7 else 50
+                height = advice["recommended_grass_height"]
+                height["value"] = max(height["value"], minimum)
+                attrs = height["attributes"]
+                attrs["min_height"] = max(attrs["min_height"], minimum)
+                attrs["max_height"] = max(attrs["max_height"], minimum)
+                attrs["configured_max_overridden"] = (
+                    attrs["max_height"] > attrs["configured_max_height"]
+                )
+                attrs["drought_recovery"] = True
+                attrs["reason"] += (
+                    " Efter tørke genoptages klipning højt og sænkes gradvist over to uger."
+                    if language.lower().startswith("da")
+                    else " After drought, resume with a high setting and lower gradually over two weeks."
+                )
+        if recovery != previous:
+            self._stored_data["drought_recovery"] = recovery
+            return True
+        return False
+
+    def _apply_mowing_cadence(
+        self,
+        advice: dict[str, Any],
+        mower_status: dict[str, Any],
+        language: str,
+    ) -> None:
+        """Apply actual cutting cadence without weakening weather protections."""
+        plan = advice["recommended_mowing_frequency"]["attributes"]
+        active = (
+            advice["robot_mower_should_run"]
+            if self.config.get(CONF_ROBOTIC_MOWER)
+            else advice["should_mow"]
+        )
+        attrs = active["attributes"]
+        attrs.update({key: value for key, value in plan.items() if key != "reason"})
+        attrs.update(
+            {key: value for key, value in mower_status.items() if key != "catch_up"}
+        )
+        attrs["height_basis"] = "recommended_setting_plus_estimated_growth"
+        last = _parse_datetime(
+            mower_status.get("last_registered_run")
+            or mower_status.get("height_reference_at")
+        )
+        interval = plan["min_interval_days"]
+        if advice["recommended_grass_height"]["attributes"].get(
+            "gradual_lowering_required"
+        ):
+            interval = max(2.0, interval or 0)
+        estimated = _as_float(mower_status.get("estimated_grass_height"))
+        target = advice["recommended_grass_height"]["value"]
+        if (
+            not self.config.get(CONF_ROBOTIC_MOWER)
+            and active["value"] is False
+            and advice["growth_rate"]["value"] == "slow"
+            and not attrs.get("safety_blocking_factors")
+            and estimated is not None
+            and estimated >= target + 3
+            and last is not None
+        ):
+            active["value"] = True
+            attrs["blocking_factors"] = []
+            attrs["reason"] = (
+                "En enkelt klipning er nødvendig ud fra den forventede græshøjde."
+                if language.lower().startswith("da")
+                else "A single cut is needed based on the expected grass height."
+            )
+        if last is not None and interval:
+            due = last + timedelta(days=interval)
+            attrs["next_mowing_not_before"] = due.isoformat()
+            if dt_util.now() < due and active["value"] is True:
+                text = (
+                    "Vent til næste planlagte klipning; græsset har brug for et interval mellem klipninger."
+                    if language.lower().startswith("da")
+                    else "Wait until the next planned cut; allow an interval between cuts."
+                )
+                attrs["blocking_factors"].append(text)
+                attrs["reason"] = " ".join(attrs["blocking_factors"])
+                attrs["catch_up"] = False
+                active["value"] = False
+        # During low growth, a height-based catch-up can be less frequent still.
+        if estimated is not None:
+            attrs["estimated_cut_mm"] = max(0.0, round(estimated - target, 1))
+
     def _apply_mowing_frequency_lock(
         self,
         advice: dict[str, Any],
@@ -522,7 +761,9 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return advice, False
 
         now = dt_util.now()
-        frequency = _mowing_update_frequency(self.config.get(CONF_MOWING_UPDATE_FREQUENCY))
+        frequency = _mowing_update_frequency(
+            self.config.get(CONF_MOWING_UPDATE_FREQUENCY)
+        )
         period_start = _mowing_period_start(now, frequency, self.daily_update_hour)
         next_update = _next_mowing_period_start(period_start, frequency)
         period_key = period_start.isoformat()
@@ -549,7 +790,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         live = deepcopy(advice["should_mow"])
         locked = deepcopy(lock["data"])
         locked["attributes"] = {
-            **locked.get("attributes", {}),
+            **live.get("attributes", {}),
             "locked": True,
             "mowing_update_frequency": frequency,
             "lock_time": lock.get("period_start", lock["locked_at"]),
@@ -557,11 +798,26 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "live_value": live["value"],
         }
         # A cadence lock must never preserve unsafe mowing or a stale low height.
-        locked["attributes"]["recommended_height"] = advice["recommended_grass_height"]["value"]
+        locked["attributes"]["recommended_height"] = advice["recommended_grass_height"][
+            "value"
+        ]
         if live["value"] is False:
             locked["value"] = False
-            locked["attributes"]["blocking_factors"] = live["attributes"]["blocking_factors"]
+            locked["attributes"]["blocking_factors"] = live["attributes"][
+                "blocking_factors"
+            ]
             locked["attributes"]["reason"] = live["attributes"]["reason"]
+        elif locked["value"] is False and live["value"] is True:
+            language = getattr(
+                getattr(getattr(self, "hass", None), "config", None), "language", "en"
+            )
+            reason = (
+                "Afventer næste vurdering af klippebehovet."
+                if language.lower().startswith("da")
+                else "Waiting for the next mowing assessment."
+            )
+            locked["attributes"]["blocking_factors"] = [reason]
+            locked["attributes"]["reason"] = reason
         advice["should_mow"] = locked
 
         return advice, should_save
@@ -592,47 +848,27 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         language: str,
     ) -> None:
         """Prevent mowing before the configured start time when night mowing is off."""
-        if self.config.get(CONF_ROBOT_MOWER_ALLOW_NIGHT, True):
-            return
-
         now = dt_util.now()
-        daily_hour = self.daily_update_hour
-        text = _mowing_time_texts(language)
-
-        if weather_data.sun_is_up is None:
-            self._block_mowing_advice(
-                advice["should_mow"],
-                text["sun_unavailable"],
-                None,
-                daily_hour,
-            )
-            return
-
-        if weather_data.sun_is_up is False:
-            self._block_mowing_advice(
-                advice["should_mow"],
-                text["night_block"],
-                False,
-                daily_hour,
-            )
-            return
-
-        if now.hour < daily_hour:
-            reason = text["start_hour_block"].format(hour=daily_hour)
-            self._block_mowing_advice(advice["should_mow"], reason, False, daily_hour)
-            self._block_mowing_advice(
-                advice["robot_mower_should_run"],
-                reason,
-                False,
-                daily_hour,
-            )
-            return
-
-        self._mark_mowing_time_window_open(advice["should_mow"], daily_hour)
-        self._mark_mowing_time_window_open(
-            advice["robot_mower_should_run"],
-            daily_hour,
+        start_hour = _valid_hour(
+            self.config.get(CONF_MOWING_START_HOUR), DEFAULT_MOWING_START_HOUR
         )
+        text = _mowing_time_texts(language)
+        reason = None
+        value = False
+        if now.hour < start_hour:
+            reason = text["start_hour_block"].format(hour=start_hour)
+        elif not self.config.get(CONF_ROBOT_MOWER_ALLOW_NIGHT, False):
+            if weather_data.sun_is_up is None:
+                reason, value = text["sun_unavailable"], None
+            elif not weather_data.sun_is_up:
+                reason = text["night_block"]
+        for key in ("should_mow", "robot_mower_should_run"):
+            if reason:
+                # A definite existing stop remains false even if the sun is unknown.
+                effective = False if advice[key]["value"] is False else value
+                self._block_mowing_advice(advice[key], reason, effective, start_hour)
+            else:
+                self._mark_mowing_time_window_open(advice[key], start_hour)
 
     def _block_mowing_advice(
         self,
@@ -704,7 +940,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         unavailable_required_entities: list[str] = []
         unavailable_optional_entities: list[str] = []
         weather_state = self.hass.states.get(config[CONF_WEATHER_ENTITY])
-        if _state_is_available(weather_state):
+        if _state_is_available(weather_state) and _measurement_is_fresh(weather_state):
             weather_attrs = weather_state.attributes
             weather_state_value = weather_state.state
         else:
@@ -712,22 +948,29 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             weather_state_value = None
             unavailable_required_entities.append(config[CONF_WEATHER_ENTITY])
         sun_state = self.hass.states.get(SUN_ENTITY_ID)
-        if (
-            not config.get(CONF_ROBOT_MOWER_ALLOW_NIGHT, True)
-            and not _state_is_available(sun_state)
-        ):
+        if not config.get(
+            CONF_ROBOT_MOWER_ALLOW_NIGHT, True
+        ) and not _state_is_available(sun_state):
             unavailable_optional_entities.append(SUN_ENTITY_ID)
         mower_entity_id = config.get(CONF_ROBOT_MOWER_ENTITY)
         mower_state = self.hass.states.get(mower_entity_id) if mower_entity_id else None
         if mower_entity_id and not _state_is_available(mower_state):
             unavailable_optional_entities.append(mower_entity_id)
 
-        hourly_forecast = forecasts.get("hourly", [])
-        daily_forecast = forecasts.get("daily", [])
-        legacy_forecast = weather_attrs.get("forecast") or []
+        temperature_unit = weather_attrs.get("temperature_unit")
+        rain_unit = weather_attrs.get("precipitation_unit")
+        hourly_forecast = normalize_forecast(
+            forecasts.get("hourly", []), temperature_unit, rain_unit
+        )
+        daily_forecast = normalize_forecast(
+            forecasts.get("daily", []), temperature_unit, rain_unit
+        )
+        legacy_forecast = normalize_forecast(
+            weather_attrs.get("forecast") or [], temperature_unit, rain_unit
+        )
         short_forecast = hourly_forecast or daily_forecast or legacy_forecast
         rain_forecast = daily_forecast or hourly_forecast or legacy_forecast
-        drying_forecast = daily_forecast or hourly_forecast or legacy_forecast
+        drying_forecast = hourly_forecast or daily_forecast or legacy_forecast
         first_forecast = short_forecast[0] if short_forecast else {}
 
         temperature = self._read_float_sensor(
@@ -747,17 +990,19 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             weather_state=weather_state_value,
             temperature=temperature
             if temperature is not None
-            else _as_float(weather_attrs.get("temperature")),
+            else normalize_value(
+                weather_attrs.get("temperature"), temperature_unit, "temperature"
+            ),
             humidity=humidity
             if humidity is not None
-            else _as_float(weather_attrs.get("humidity")),
+            else normalize_value(weather_attrs.get("humidity"), "%", "humidity"),
             recent_rain=recent_rain,
             recent_hour_rain=None,
             soil_moisture=self._read_float_sensor(
                 CONF_SOIL_MOISTURE_SENSOR,
                 unavailable_optional_entities,
             ),
-            forecast_rain=_forecast_precipitation(short_forecast),
+            forecast_rain=_forecast_precipitation(short_forecast, now),
             forecast_rain_5_days=_forecast_precipitation_days(
                 rain_forecast,
                 _int_config(
@@ -765,6 +1010,7 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     CONF_FORECAST_RAIN_DAYS,
                     DEFAULT_FORECAST_RAIN_DAYS,
                 ),
+                now,
             ),
             forecast_rain_next_24h=_forecast_precipitation_next_hours(
                 short_forecast,
@@ -790,6 +1036,9 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ),
             month=now.month,
             day=now.day,
+            **forecast_temperature(
+                hourly_forecast or daily_forecast or legacy_forecast, now
+            ),
         )
 
     def _read_float_sensor(
@@ -803,11 +1052,20 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return None
 
         state = self.hass.states.get(entity_id)
-        if not _state_is_available(state):
+        if not _state_is_available(state) or not _measurement_is_fresh(state):
             unavailable_entities.append(entity_id)
             return None
 
-        value = _as_float(state.state)
+        kind = (
+            "temperature"
+            if config_key == CONF_TEMPERATURE_SENSOR
+            else "rain"
+            if config_key == CONF_RAIN_SENSOR
+            else "humidity"
+        )
+        value = normalize_value(
+            state.state, state.attributes.get("unit_of_measurement"), kind
+        )
         if value is None:
             unavailable_entities.append(entity_id)
         return value
@@ -822,13 +1080,11 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if rain_sensor is not None:
             return rain_sensor
 
-        for key in (
-            "precipitation",
-            "precipitation_today",
-            "rain",
-            "rainfall",
-        ):
-            rain = _as_float(weather_attrs.get(key))
+        # Only explicitly cumulative daily amounts can feed the rain history.
+        for key in ("precipitation_today", "rain_today", "rainfall_today"):
+            rain = normalize_value(
+                weather_attrs.get(key), weather_attrs.get("precipitation_unit"), "rain"
+            )
             if rain is not None:
                 return rain
 
@@ -876,16 +1132,27 @@ class LawnControlCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             item
             for item in history
             if _parse_datetime(item.get("time")) is not None
-            and _parse_datetime(item["time"]) >= cutoff_weather_summary
+            and cutoff_weather_summary <= _parse_datetime(item["time"]) <= now
         ]
-        seasonal_temperature, seasonal_coverage = _seasonal_temperature_summary(history, now)
+        seasonal_temperature, seasonal_coverage = _seasonal_temperature_summary(
+            history, now
+        )
         return (
             replace(
                 weather_data,
                 seasonal_temperature_72h=seasonal_temperature,
                 seasonal_temperature_coverage_hours=seasonal_coverage,
-                historical_temperature=_average(
-                    item.get("temperature") for item in recent_weather_items
+                historical_temperature=_seasonal_temperature_summary(
+                    recent_weather_items, now
+                )[0],
+                historical_temperature_coverage_hours=len(
+                    {
+                        _parse_datetime(item["time"]).replace(
+                            minute=0, second=0, microsecond=0
+                        )
+                        for item in recent_weather_items
+                        if _as_float(item.get("temperature")) is not None
+                    }
                 ),
                 historical_humidity=_average(
                     item.get("humidity") for item in recent_weather_items
@@ -912,21 +1179,28 @@ def _seasonal_temperature_summary(
     for item in history:
         item_time = _parse_datetime(item.get("time"))
         temperature = _as_float(item.get("temperature"))
-        if item_time is None or temperature is None or not now - timedelta(hours=72) <= item_time <= now:
+        if (
+            item_time is None
+            or temperature is None
+            or not now - timedelta(hours=72) <= item_time <= now
+        ):
             continue
         hour = item_time.replace(minute=0, second=0, microsecond=0)
         bins.setdefault(hour, []).append(temperature)
     if not bins:
         return None, 0.0
     mean = _average(sum(values) / len(values) for values in bins.values())
-    coverage = (max(bins) - min(bins)).total_seconds() / 3600 if len(bins) >= 48 else 0.0
+    coverage = (
+        (max(bins) - min(bins)).total_seconds() / 3600 if len(bins) >= 48 else 0.0
+    )
     return mean, coverage
 
 
 def _as_float(value: Any) -> float | None:
     """Convert a value to float when possible."""
     try:
-        return float(value)
+        number = float(value)
+        return number if math.isfinite(number) else None
     except (TypeError, ValueError):
         return None
 
@@ -950,6 +1224,17 @@ def _state_is_available(state: Any) -> bool:
     if state is None:
         return False
     return state.state not in UNAVAILABLE_STATES
+
+
+def _measurement_is_fresh(state: Any) -> bool:
+    """Use reported time, not last value change: constant readings can be fresh."""
+    reported = getattr(state, "last_reported", None)
+    if reported is None:
+        return True
+    try:
+        return timedelta(0) <= dt_util.now() - reported <= timedelta(hours=6)
+    except TypeError:
+        return False
 
 
 def _availability_data(weather_data: LawnWeatherData) -> dict[str, Any]:
@@ -1063,233 +1348,6 @@ def _int_config(config: dict[str, Any], key: str, default: int) -> int:
         return default
 
 
-def _forecast_precipitation(forecast: list[dict[str, Any]]) -> float | None:
-    """Estimate near-term forecast precipitation from weather attributes."""
-    if not forecast:
-        return None
-
-    forecast_window = 24 if len(forecast) > 8 else 3
-    return _sum_forecast_rain(forecast, forecast_window)
-
-
-def _forecast_precipitation_days(
-    forecast: list[dict[str, Any]], days: int
-) -> float | None:
-    """Estimate forecast precipitation for the configured horizon."""
-    if not forecast:
-        return None
-
-    return _sum_forecast_rain(forecast, _forecast_window_size(forecast, days))
-
-
-def _sum_forecast_rain(
-    forecast: list[dict[str, Any]], forecast_window: int
-) -> float | None:
-    """Sum forecast precipitation over the requested number of entries."""
-    total = 0.0
-    found = False
-    for item in forecast[:forecast_window]:
-        value = item.get("precipitation")
-        rain = _as_float(value)
-        if rain is not None:
-            total += rain
-            found = True
-
-    return round(total, 1) if found else None
-
-
-def _forecast_drying_pressure(
-    forecast: list[dict[str, Any]], hours: int, now: datetime
-) -> float | None:
-    """Return forecast drying pressure measured as sunny-day equivalents."""
-    if not forecast:
-        return None
-
-    interval_hours = _forecast_interval_hours(forecast)
-    total = 0.0
-    found = False
-
-    for item, overlap_hours in _forecast_periods(
-        forecast,
-        hours,
-        now,
-        interval_hours,
-    ):
-        condition = item.get("condition")
-        temperature = _as_float(item.get("temperature"))
-        humidity = _as_float(item.get("humidity"))
-        rain = _probability_weighted_rain(item)
-        if condition is None and temperature is None and rain is None:
-            continue
-
-        condition_factor = _drying_condition_factor(condition)
-        temperature_factor = _drying_temperature_factor(temperature)
-        humidity_factor = _drying_humidity_factor(humidity)
-        rain_factor = _drying_rain_factor(rain, interval_hours)
-        total += (
-            condition_factor
-            * temperature_factor
-            * humidity_factor
-            * rain_factor
-            * overlap_hours
-            / 24
-        )
-        found = True
-
-    return round(total, 2) if found else None
-
-
-def _forecast_precipitation_next_hours(
-    forecast: list[dict[str, Any]], hours: int, now: datetime
-) -> float | None:
-    """Return probability-weighted rain from periods overlapping the horizon."""
-    if not forecast:
-        return None
-
-    interval_hours = _forecast_interval_hours(forecast)
-    total = 0.0
-    found = False
-    for item, _overlap_hours in _forecast_periods(
-        forecast,
-        hours,
-        now,
-        interval_hours,
-    ):
-        rain = _probability_weighted_rain(item)
-        if rain is not None:
-            total += rain
-            found = True
-
-    return round(total, 1) if found else None
-
-
-def _forecast_periods(
-    forecast: list[dict[str, Any]],
-    hours: int,
-    now: datetime,
-    interval_hours: float,
-) -> list[tuple[dict[str, Any], float]]:
-    """Return forecast items and their overlap with a future time horizon."""
-    horizon_end = now + timedelta(hours=hours)
-    periods: list[tuple[dict[str, Any], float]] = []
-
-    for index, item in enumerate(forecast):
-        period_start = _parse_datetime(item.get("datetime"))
-        if period_start is None:
-            period_start = now + timedelta(hours=index * interval_hours)
-        period_end = period_start + timedelta(hours=interval_hours)
-
-        try:
-            overlap_start = max(now, period_start)
-            overlap_end = min(horizon_end, period_end)
-        except TypeError:
-            period_start = now + timedelta(hours=index * interval_hours)
-            period_end = period_start + timedelta(hours=interval_hours)
-            overlap_start = period_start
-            overlap_end = min(horizon_end, period_end)
-
-        if overlap_end <= overlap_start:
-            continue
-        overlap_hours = (overlap_end - overlap_start).total_seconds() / 3600
-        periods.append((item, overlap_hours))
-
-    return periods
-
-
-def _forecast_interval_hours(forecast: list[dict[str, Any]]) -> float:
-    """Return the approximate number of hours represented by each forecast item."""
-    if len(forecast) > 1:
-        first = _parse_datetime(forecast[0].get("datetime"))
-        second = _parse_datetime(forecast[1].get("datetime"))
-        if first is not None and second is not None:
-            hours = abs((second - first).total_seconds()) / 3600
-            if hours > 0:
-                return min(24.0, hours)
-    return 1.0 if len(forecast) > 8 else 24.0
-
-
-def _probability_weighted_rain(item: dict[str, Any]) -> float | None:
-    """Return expected rain after precipitation probability is considered."""
-    rain = _as_float(item.get("precipitation"))
-    if rain is None:
-        return None
-
-    probability = _as_float(item.get("precipitation_probability"))
-    if probability is None:
-        return rain
-    return rain * max(0.0, min(100.0, probability)) / 100
-
-
-def _drying_condition_factor(condition: Any) -> float:
-    """Return relative drying strength for a weather condition."""
-    if condition == "sunny":
-        return 1.0
-    if condition == "partlycloudy":
-        return 0.65
-    if condition in ("cloudy", "fog"):
-        return 0.2
-    if condition == "clear-night":
-        return 0.05
-    if condition in ("rainy", "pouring", "lightning-rainy", "snowy", "hail"):
-        return 0.0
-    return 0.35
-
-
-def _drying_temperature_factor(temperature: float | None) -> float:
-    """Return relative drying strength for forecast temperature."""
-    if temperature is None:
-        return 1.0
-    if temperature >= 28:
-        return 1.45
-    if temperature >= 24:
-        return 1.2
-    if temperature >= 18:
-        return 1.0
-    if temperature >= 12:
-        return 0.7
-    return 0.4
-
-
-def _drying_humidity_factor(humidity: float | None) -> float:
-    """Return relative drying strength for forecast humidity."""
-    if humidity is None:
-        return 1.0
-    if humidity < 40:
-        return 1.2
-    if humidity >= 75:
-        return 0.7
-    return 1.0
-
-
-def _drying_rain_factor(rain: float | None, interval_hours: float) -> float:
-    """Reduce drying pressure when meaningful rain is expected in the period."""
-    if rain is None or rain <= 0:
-        return 1.0
-
-    meaningful_rain = 0.5 if interval_hours <= 2 else 5.0
-    if rain >= meaningful_rain:
-        return 0.1
-    return 0.4
-
-
-def _forecast_window_size(forecast: list[dict[str, Any]], days: int) -> int:
-    """Return entries covering roughly the configured forecast days."""
-    if len(forecast) <= days:
-        return len(forecast)
-
-    first = _parse_datetime(forecast[0].get("datetime"))
-    second = _parse_datetime(forecast[1].get("datetime"))
-    if first is not None and second is not None:
-        interval = abs(second - first)
-        if interval <= timedelta(hours=2):
-            return min(len(forecast), 24 * days)
-        return min(len(forecast), days)
-
-    if len(forecast) > 8:
-        return min(len(forecast), 24 * days)
-    return min(len(forecast), days)
-
-
 def _parse_datetime(value: Any) -> datetime | None:
     """Parse an ISO datetime from storage."""
     if not isinstance(value, str):
@@ -1340,9 +1398,11 @@ def _growth_total_since(
             segment_start = max(previous_time, since)
             segment_end = min(item_time, now)
             if segment_end > segment_start:
-                total += previous_growth * (
-                    segment_end - segment_start
-                ).total_seconds() / 86400
+                total += (
+                    previous_growth
+                    * (segment_end - segment_start).total_seconds()
+                    / 86400
+                )
                 found_sample = True
 
         previous_time = item_time
@@ -1453,7 +1513,8 @@ def _days_since_date(value: Any, now: datetime) -> int | None:
     except ValueError:
         return None
 
-    return max(0, (now.date() - fertilized_date).days)
+    days = (now.date() - fertilized_date).days
+    return days if days >= 0 else None
 
 
 def _is_valid_date(value: Any) -> bool:

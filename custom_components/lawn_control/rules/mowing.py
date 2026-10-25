@@ -15,6 +15,7 @@ from ..const import (
     CONF_WATER_DURING_DROUGHT,
     CONF_WATERING_LEVEL,
 )
+from .fertilizer import fertilizer_effect
 from .moisture import lacks_moisture_support
 from .season import GROWTH_STOP_TEMPERATURE, growth_temperature
 
@@ -65,7 +66,7 @@ def calculate_growth_rate(
         estimated += weather_adjustment
         reasons.append(text["dry_weather_growth"])
 
-    drought_penalty = _drought_growth_penalty(config, drought)
+    drought_penalty = _drought_growth_penalty(config, drought, weather)
     if drought_penalty:
         estimated -= drought_penalty
         reasons.append(text["drought_growth"].format(risk=text[drought["value"]]))
@@ -83,12 +84,15 @@ def calculate_growth_rate(
 
     # Weather and fertilizer bonuses cannot restart dormant or cold grass.
     temperature = growth_temperature(weather)
-    if weather.month in (11, 12, 1, 2) or (temperature is not None and temperature <= GROWTH_STOP_TEMPERATURE):
+    if weather.month in (11, 12, 1, 2) or (
+        temperature is not None and temperature <= GROWTH_STOP_TEMPERATURE
+    ):
         estimated = 0.0
         fertilizer_bonus = 0.0
     temperature_factor = (
         min(1.0, max(0.0, (temperature - GROWTH_STOP_TEMPERATURE) / 6))
-        if temperature is not None else 1.0
+        if temperature is not None
+        else 1.0
     )
     estimated *= temperature_factor
     fertilizer_bonus = round(fertilizer_bonus * temperature_factor, 1)
@@ -107,6 +111,9 @@ def calculate_growth_rate(
     if not reasons:
         reasons.append(text["default_growth"])
 
+    known = weather.temperature is not None and weather.weather_state is not None
+    if not known:
+        rate = "unknown"
     fertilizer_days = _fertilizer_days_attributes(config)
     return {
         "value": rate,
@@ -115,8 +122,9 @@ def calculate_growth_rate(
             "historical_temperature": weather.historical_temperature,
             "growth_temperature": temperature,
             "temperature_growth_factor": round(temperature_factor, 2),
-            "estimated_mm_per_day": estimated,
-            "estimated_mm_next_7_days": round(estimated * 7, 1),
+            "estimate_known": known,
+            "estimated_mm_per_day": estimated if known else None,
+            "estimated_mm_next_7_days": round(estimated * 7, 1) if known else None,
             "fertilizer_growth_bonus_mm_per_day": fertilizer_bonus,
             "days_since_fertilizer": fertilizer_days["days_since_fertilizer"],
             "reason": " ".join(reasons),
@@ -156,6 +164,7 @@ def calculate_mowing_advice(
     if lacks_moisture_support(config, weather):
         blocking_factors.append(text["mow_low_water"])
 
+    safety_blocks = list(blocking_factors)
     if growth["value"] in ("stopped", "slow"):
         blocking_factors.append(text["limited_growth"])
 
@@ -166,9 +175,10 @@ def calculate_mowing_advice(
         reason = " ".join(blocking_factors) or text["mow_not_needed"]
 
     return {
-        "value": recommended,
+        "value": None if not mowing_data_known(weather) else recommended,
         "attributes": {
             "blocking_factors": blocking_factors,
+            "safety_blocking_factors": safety_blocks,
             "recommended_height": height["value"],
             "max_cut_fraction": 1 / 3,
             "cutting_guidance": text["one_third"],
@@ -195,7 +205,7 @@ def calculate_robot_mower_advice(
     if not config.get(CONF_ROBOTIC_MOWER):
         blocking_factors.append(text["robot_disabled"])
 
-    night_mowing_allowed = config.get(CONF_ROBOT_MOWER_ALLOW_NIGHT, True)
+    night_mowing_allowed = config.get(CONF_ROBOT_MOWER_ALLOW_NIGHT, False)
     night_window_unknown = False
     if not night_mowing_allowed:
         if weather.sun_is_up is False:
@@ -207,10 +217,10 @@ def calculate_robot_mower_advice(
     if weather.weather_state in ("rainy", "pouring", "lightning-rainy", "hail"):
         blocking_factors.append(text["robot_weather"])
 
-    if weather.historical_humidity is not None and weather.historical_humidity >= 90:
-        blocking_factors.append(text["history_humidity"])
-
-    if weather.historical_temperature is not None and weather.historical_temperature <= GROWTH_STOP_TEMPERATURE:
+    if (
+        weather.historical_temperature is not None
+        and weather.historical_temperature <= GROWTH_STOP_TEMPERATURE
+    ):
         blocking_factors.append(text["history_cold"])
 
     if lacks_moisture_support(config, weather):
@@ -228,10 +238,15 @@ def calculate_robot_mower_advice(
     if drought["value"] in ("high", "critical"):
         blocking_factors.append(text["robot_drought"])
 
+    safety_blocks = list(blocking_factors)
     if growth["value"] in ("stopped", "slow"):
         blocking_factors.append(text["robot_limited_growth"])
 
-    allowed = None if night_window_unknown else not blocking_factors
+    allowed = (
+        None
+        if night_window_unknown or not mowing_data_known(weather)
+        else not blocking_factors
+    )
     if allowed:
         reason = text["robot_ok"]
     else:
@@ -241,6 +256,7 @@ def calculate_robot_mower_advice(
         "value": allowed,
         "attributes": {
             "blocking_factors": blocking_factors,
+            "safety_blocking_factors": safety_blocks,
             "night_mowing_allowed": night_mowing_allowed,
             "max_cut_fraction": 1 / 3,
             "cutting_guidance": text["one_third"],
@@ -257,11 +273,23 @@ def calculate_robot_mower_advice(
     }
 
 
+def mowing_data_known(weather: LawnWeatherData) -> bool:
+    return (
+        weather.temperature is not None
+        and weather.weather_state is not None
+        and (weather.soil_moisture is not None or weather.historical_rain is not None)
+    )
+
+
 def protect_cut_height(
     height: dict[str, Any], estimated_height: float | None, language: str
 ) -> None:
     """Limit a tracked lawn's estimated cut to one third, rounded upward."""
-    if estimated_height is None or not isfinite(estimated_height) or estimated_height <= 0:
+    if (
+        estimated_height is None
+        or not isfinite(estimated_height)
+        or estimated_height <= 0
+    ):
         return
     safe_height = ceil(estimated_height * 2 / 3 / 5) * 5
     if safe_height <= height["value"]:
@@ -270,8 +298,12 @@ def protect_cut_height(
     height["value"] = safe_height
     attributes["min_height"] = max(attributes["min_height"], safe_height)
     attributes["max_height"] = max(attributes["max_height"], safe_height)
-    attributes["configured_max_overridden"] = safe_height > attributes["configured_max_height"]
+    attributes["configured_max_overridden"] = (
+        safe_height > attributes["configured_max_height"]
+    )
     attributes["estimated_height_before_cut"] = estimated_height
+    attributes["gradual_lowering_required"] = True
+    attributes["next_cut_min_interval_days"] = 2
     attributes["reason"] += " " + _texts(language)["one_third"]
 
 
@@ -281,6 +313,14 @@ def mowing_safety_blocks(
     """Shared protection that also applies to catch-up and locked advice."""
     text = _texts(language)
     blocks: list[str] = []
+    if weather.temperature is None:
+        blocks.append(text["temperature_missing"])
+    if weather.weather_state is None:
+        blocks.append(text["weather_missing"])
+    # Current humidity is only a proxy for dew; do not use yesterday's mean.
+    if weather.humidity is not None and weather.humidity >= 95:
+        blocks.append(text["dew"])
+
     if weather.month in (11, 12, 1, 2):
         blocks.append(text["outside_mowing_season"])
     if weather.weather_state in ("snowy", "snowy-rainy") or (
@@ -310,7 +350,9 @@ def _fertilizer_growth_effect(
     if weather.month in (11, 12, 1, 2):
         return _empty_fertilizer_effect()
 
-    if drought["value"] in ("high", "critical"):
+    if drought["value"] in ("high", "critical") or lacks_moisture_support(
+        config, weather
+    ):
         return _empty_fertilizer_effect()
 
     temperature = growth_temperature(weather)
@@ -320,11 +362,11 @@ def _fertilizer_growth_effect(
     n = _float_config(config, CONF_FERTILIZER_N_PERCENT)
     p = _float_config(config, CONF_FERTILIZER_P_PERCENT)
     k = _float_config(config, CONF_FERTILIZER_K_PERCENT)
-    days = _float_config(config, CONF_DAYS_SINCE_FERTILIZER, default=90)
-    if n <= 0 or days > 60:
+    effect = fertilizer_effect(config)
+    if n <= 0 or not effect["application_known"] or not effect["age_factor"]:
         return _empty_fertilizer_effect()
 
-    age_factor = max(0.0, 1 - (days / 60))
+    age_factor = effect["age_factor"] * min(1.0, effect["dose_factor"])
     fertilizer_strength = _fertilizer_strength(n, p, k)
     residual_score = _fertilizer_residual_score(n, p, k, age_factor)
     moisture_factor = _fertilizer_moisture_factor(config, weather)
@@ -409,7 +451,9 @@ def _fertilizer_moisture_factor(
     return 1.0
 
 
-def _drought_growth_penalty(config: dict[str, Any], drought: dict[str, Any]) -> float:
+def _drought_growth_penalty(
+    config: dict[str, Any], drought: dict[str, Any], weather: LawnWeatherData
+) -> float:
     """Return drought growth penalty after configured watering is considered."""
     if drought["value"] == "critical":
         base_penalty = 2.0
@@ -418,7 +462,9 @@ def _drought_growth_penalty(config: dict[str, Any], drought: dict[str, Any]) -> 
     else:
         return 0.0
 
-    if not config.get(CONF_WATER_DURING_DROUGHT):
+    if not config.get(CONF_WATER_DURING_DROUGHT) or lacks_moisture_support(
+        config, weather
+    ):
         return base_penalty
 
     level = config.get(CONF_WATERING_LEVEL, "normal")
@@ -435,7 +481,9 @@ def _watering_growth_bonus(
     weather: LawnWeatherData,
 ) -> float:
     """Estimate growth support from watering during dry periods."""
-    if not config.get(CONF_WATER_DURING_DROUGHT):
+    if not config.get(CONF_WATER_DURING_DROUGHT) or lacks_moisture_support(
+        config, weather
+    ):
         return 0.0
 
     if weather.month in (11, 12, 1, 2):
@@ -489,17 +537,24 @@ def _weather_growth_adjustment(
     ):
         return -0.6 if sun_factor == "sunny" else -0.4
 
-    if humidity is not None and humidity < 40 and drought["value"] in (
-        "medium",
-        "high",
-        "critical",
+    if (
+        humidity is not None
+        and humidity < 40
+        and drought["value"]
+        in (
+            "medium",
+            "high",
+            "critical",
+        )
     ):
         return -0.3
 
     return 0.0
 
 
-def _sun_factor(weather_state: str | None, forecast_condition: str | None) -> str | None:
+def _sun_factor(
+    weather_state: str | None, forecast_condition: str | None
+) -> str | None:
     """Return current or forecast sunlight signal."""
     conditions = {weather_state, forecast_condition}
     if "sunny" in conditions:
@@ -520,9 +575,7 @@ def _first_known(*values: float | None) -> float | None:
 def _fertilizer_days_attributes(config: dict[str, Any]) -> dict[str, Any]:
     """Return fertilizer age data used by growth rules."""
     return {
-        "days_since_fertilizer": _float_config(
-            config, CONF_DAYS_SINCE_FERTILIZER, default=90
-        ),
+        "days_since_fertilizer": config.get(CONF_DAYS_SINCE_FERTILIZER),
     }
 
 
@@ -542,6 +595,9 @@ def _texts(language: str) -> dict[str, str]:
     """Return localized mowing text."""
     if language.lower().startswith("da"):
         return {
+            "temperature_missing": "Temperaturdata mangler; klipning kan ikke vurderes.",
+            "weather_missing": "Vejrdata mangler; klipning kan ikke vurderes.",
+            "dew": "Meget høj aktuel luftfugtighed tyder på dug; vent til græsset er tørt.",
             "outside_mowing_season": "Hold klippepause fra november til februar.",
             "frost": "Undgå klipning ved frost eller sne.",
             "dry_soil": "Målt tør jord kræver klippepause, selv hvis vanding er aktiveret.",
@@ -564,9 +620,9 @@ def _texts(language: str) -> dict[str, str]:
             "recent_rain_wet": "5 mm eller mere regn den seneste time kan efterlade græsset for vådt.",
             "forecast_rain": "Kraftig forecast-regn gør græsslåning mindre egnet.",
             "wet_weather": "Det aktuelle vejr er vådt.",
-            "mow_low_water": "Den akkumulerede regn og forecast-regn er for lav til græsslåning.",
+            "mow_low_water": "Den observerede fugt er for lav til græsslåning.",
             "limited_growth": "Væksten er for begrænset til at retfærdiggøre græsslåning.",
-            "mow_ok": "Forholdene er tørre nok, og væksten understøtter græsslåning.",
+            "mow_ok": "Ingen kendte stopgrunde; klip kun, hvis græsset er tørt.",
             "mow_not_needed": "Græsslåning er ikke nødvendig i dag.",
             "robot_disabled": "Robotplæneklipper er ikke aktiveret i integrationen.",
             "robot_night": "Robotklipning om natten er slået fra.",
@@ -574,7 +630,7 @@ def _texts(language: str) -> dict[str, str]:
             "robot_weather": "Det aktuelle vejr er ikke egnet til robotklipning.",
             "history_humidity": "Fugtighedshistorikken tyder på langsom tørring.",
             "history_cold": "Temperaturhistorikken er for kold til klipning.",
-            "robot_low_water": "Den akkumulerede regn og forecast-regn er for lav til robotklipning.",
+            "robot_low_water": "Den observerede fugt er for lav til robotklipning.",
             "robot_recent_rain": "5 mm eller mere regn den seneste time kan efterlade græsset for vådt til robotklipning.",
             "robot_forecast": "Forecast-regn gør robotklipning mindre egnet.",
             "robot_drought": "Undgå robotklipning under betydelig tørkestress.",
@@ -588,6 +644,9 @@ def _texts(language: str) -> dict[str, str]:
         }
 
     return {
+        "temperature_missing": "Temperature data is missing; mowing cannot be assessed.",
+        "weather_missing": "Weather data is missing; mowing cannot be assessed.",
+        "dew": "Very high current humidity suggests dew; wait until the grass is dry.",
         "outside_mowing_season": "Pause mowing from November through February.",
         "frost": "Avoid mowing in frost or snow.",
         "dry_soil": "Measured dry soil requires a mowing pause even when watering is enabled.",
@@ -610,9 +669,9 @@ def _texts(language: str) -> dict[str, str]:
         "recent_rain_wet": "5 mm or more rain in the last hour can leave the grass too wet.",
         "forecast_rain": "Heavy forecast rain makes mowing less suitable.",
         "wet_weather": "Current weather is wet.",
-        "mow_low_water": "Accumulated rain and forecast rain are too low for mowing.",
+        "mow_low_water": "Observed moisture is too low for mowing.",
         "limited_growth": "Growth is too limited to justify mowing.",
-        "mow_ok": "Conditions are dry enough and growth supports regular mowing.",
+        "mow_ok": "No known blocking factors; mow only if the grass is dry.",
         "mow_not_needed": "Mowing is not needed today.",
         "robot_disabled": "Robotic mower is not enabled in this integration.",
         "robot_night": "Robot mowing at night is disabled.",
@@ -620,7 +679,7 @@ def _texts(language: str) -> dict[str, str]:
         "robot_weather": "Current weather is not suitable for robot mowing.",
         "history_humidity": "Recent humidity history suggests slow drying.",
         "history_cold": "Recent temperature history is too cold for mowing.",
-        "robot_low_water": "Accumulated rain and forecast rain are too low for robot mowing.",
+        "robot_low_water": "Observed moisture is too low for robot mowing.",
         "robot_recent_rain": "5 mm or more rain in the last hour can leave grass too wet for robot mowing.",
         "robot_forecast": "Forecast rain makes robot mowing less suitable.",
         "robot_drought": "Avoid robot mowing during significant drought stress.",
@@ -632,3 +691,75 @@ def _texts(language: str) -> dict[str, str]:
         "high": "high",
         "critical": "critical",
     }
+
+
+def mowing_frequency(
+    config: dict[str, Any],
+    weather: LawnWeatherData,
+    growth: dict[str, Any],
+    language: str,
+    drought: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Recommend cuts per week independently of the advice refresh interval."""
+    robot = bool(config.get(CONF_ROBOTIC_MOWER))
+    known = growth["attributes"].get("estimate_known", True)
+    paused = (
+        growth["attributes"].get("mowing_season_status") != "ready"
+        or (drought is not None and drought["value"] in ("high", "critical"))
+        or (weather.soil_moisture is not None and weather.soil_moisture < 25)
+    )
+    if not known:
+        cuts = None
+    elif paused or growth["value"] == "stopped":
+        cuts = 0
+    elif growth["value"] == "slow":
+        cuts = 1
+    elif robot:
+        cuts = 3 if weather.month in (3, 4, 10) else 7
+    else:
+        cuts = 3 if growth["value"] == "fast" else 2
+    if language.lower().startswith("da"):
+        guidance = (
+            "Afventer data til klippefrekvens."
+            if cuts is None
+            else "Hold klippepause."
+            if cuts == 0
+            else "Lav vækst: klip kun ved behov, højst én gang om ugen."
+            if cuts == 1
+            else f"Sigt efter {cuts} klippedage om ugen, når græsset er tørt og forholdene tillader det."
+        )
+    else:
+        guidance = (
+            "Waiting for data to assess mowing frequency."
+            if cuts is None
+            else "Pause mowing."
+            if cuts == 0
+            else "Limited growth: mow only if needed, at most once a week."
+            if cuts == 1
+            else f"Aim for {cuts} mowing days per week when grass is dry and conditions permit."
+        )
+    return {
+        "value": cuts,
+        "attributes": {
+            "recommended_cuts_per_week": cuts,
+            "min_interval_days": round(7 / cuts, 2) if cuts else None,
+            "frequency_guidance": guidance,
+            "reason": guidance,
+            "growth_rate": growth["value"],
+        },
+    }
+
+
+def gradual_cut_plan(current: float, target: float) -> list[int]:
+    """Plan safe settings; each step is separated by at least two days."""
+    plan: list[int] = []
+    if not isfinite(current) or current <= 0 or not isfinite(target) or target <= 0:
+        return plan
+    while current > target:
+        next_height = max(ceil(current * 2 / 3 / 5) * 5, ceil(target))
+        # At tiny heights rounding must never trap the planner.
+        if next_height >= current:
+            break
+        plan.append(next_height)
+        current = next_height
+    return plan

@@ -17,7 +17,7 @@
           "robot_mower_entity": "Robotplæneklipper-entity",
           "robot_mower_allow_night": "Tillad klipning om natten",
           "mowing_update_frequency": "Opdateringsfrekvens for klippeanbefaling",
-          "daily_update_hour": "Dagligt klippetidspunkt",
+          "daily_update_hour": "Daglig vurderingstime",
           "historical_rain_threshold": "Historisk regngrænse",
           "forecast_rain_threshold": "Forecast-regngrænse",
           "historical_rain_days": "Historiske regndage",
@@ -28,18 +28,29 @@
           "min_grass_height": "Minimum græshøjde",
           "max_grass_height": "Maksimum græshøjde",
           "water_during_drought": "Vander i tørre perioder",
-          "watering_level": "Vandingsniveau"
+          "watering_level": "Vandingsniveau",
+          "mowing_start_hour": "Tidligste klippestart",
+          "fertilizer_type": "Gødningstype",
+          "fertilizer_effect_days": "Virkningsperiode på etiketten",
+          "fertilizer_dose_g_m2": "Senest tilført gødning (g/m²)",
+          "fertilizer_label_dose_g_m2": "Dosering på etiketten (g/m²)"
         },
         "data_description": {
           "rain_sensor": "Vælg en sensor der viser samlet nedbør i dag indtil videre, ikke aktuel regn eller regn pr. time.",
           "robot_mower_entity": "Valgfri lawn_mower entity der bruges til at registrere hvornår robotten sidst har klippet.",
           "robot_mower_allow_night": "Hvis slået fra, vil klipning ikke blive anbefalet mellem solnedgang og solopgang.",
-          "mowing_update_frequency": "Vælg hvor længe hver klippeanbefaling skal gælde.",
-          "daily_update_hour": "Tidligste time hvor klipning kan anbefales, når natklipning er slået fra. Bruges også som daglig opdateringstid ved daglig frekvens. Vælg 0-23, for eksempel 8 for kl. 08:00.",
-          "historical_rain_threshold": "Mindste historiske regnmængde der alene kan tælle som nok fugt. Kan vælges fra 5 til 15 mm.",
-          "forecast_rain_threshold": "Mindste forventede regnmængde der alene kan tælle som nok kommende fugt. Kan vælges fra 10 til 25 mm.",
+          "mowing_update_frequency": "Hvor ofte klipperådet opdateres. Den anbefalede klippefrekvens vises separat.",
+          "daily_update_hour": "Bestemmer kun tidspunktet for den daglige opdatering af klipperådet.",
+          "historical_rain_threshold": "Observeret regn bruges som skøn for jordfugt, når en jordfugtighedssensor mangler. Vælg 5–15 mm.",
+          "forecast_rain_threshold": "Grænse for kommende fugt i tørkevurderingen. Forventet regn gør ikke jorden fugtig nu.",
           "historical_rain_days": "Antal dage bagud der bruges til historisk regn. Kan vælges fra 3 til 10 dage.",
-          "forecast_rain_days": "Antal dage frem der bruges til forecast-regn. Kan vælges fra 2 til 7 dage."
+          "forecast_rain_days": "Antal dage frem der bruges til forecast-regn. Kan vælges fra 2 til 7 dage.",
+          "mowing_start_hour": "Selvstændig startgrænse for klipning, også når natklipning er tilladt. Standard kl. 09. Vent altid til græsset er tørt.",
+          "fertilizer_type": "Almindelig gødning vurderes i marts–september; efterårsgødning kun i september–oktober. Begge kræver aktiv vækst og egnede forhold.",
+          "fertilizer_effect_days": "Brug produktets angivne virkningsperiode. Standard 60 dage er kun et udgangspunkt; udløbet tid dokumenterer ikke næringsmangel.",
+          "fertilizer_dose_g_m2": "Mængden ved den seneste gødskning. Lad feltet være tomt, hvis den ikke kendes; integrationen anbefaler da ikke automatisk mere.",
+          "fertilizer_label_dose_g_m2": "Dosering fra produktets etiket, som den tilførte mængde sammenholdes med. Følg altid etiketten.",
+          "water_during_drought": "Angiver din vandingspraksis. Det dokumenterer ikke, at jorden er fugtig; klipning og gødning kræver observeret fugtstøtte."
         }
       }
     },
@@ -47,7 +58,8 @@
       "height_range": "Minimum græshøjde skal være lavere end maksimum græshøjde.",
       "invalid_hour": "Tidspunktet skal være en hel time fra 0 til 23.",
       "invalid_mowing_update_frequency": "Vælg en gyldig opdateringsfrekvens for klippeanbefalingen.",
-      "invalid_rain_setting": "Regnindstillingen er uden for det tilladte interval."
+      "invalid_rain_setting": "Regnindstillingen er uden for det tilladte interval.",
+      "invalid_fertilizer_setting": "Kontrollér gødningstype, virkningsperiode (7–180 dage) og mængder (0–200 g/m²)."
     },
     "abort": {
       "already_configured": "Denne plæne er allerede konfigureret."
@@ -70,7 +82,7 @@
           "robot_mower_entity": "Robotplæneklipper-entity",
           "robot_mower_allow_night": "Tillad klipning om natten",
           "mowing_update_frequency": "Opdateringsfrekvens for klippeanbefaling",
-          "daily_update_hour": "Dagligt klippetidspunkt",
+          "daily_update_hour": "Daglig vurderingstime",
           "historical_rain_threshold": "Historisk regngrænse",
           "forecast_rain_threshold": "Forecast-regngrænse",
           "historical_rain_days": "Historiske regndage",
@@ -81,18 +93,29 @@
           "min_grass_height": "Minimum græshøjde",
           "max_grass_height": "Maksimum græshøjde",
           "water_during_drought": "Vander i tørre perioder",
-          "watering_level": "Vandingsniveau"
+          "watering_level": "Vandingsniveau",
+          "mowing_start_hour": "Tidligste klippestart",
+          "fertilizer_type": "Gødningstype",
+          "fertilizer_effect_days": "Virkningsperiode på etiketten",
+          "fertilizer_dose_g_m2": "Senest tilført gødning (g/m²)",
+          "fertilizer_label_dose_g_m2": "Dosering på etiketten (g/m²)"
         },
         "data_description": {
           "rain_sensor": "Vælg en sensor der viser samlet nedbør i dag indtil videre, ikke aktuel regn eller regn pr. time.",
           "robot_mower_entity": "Valgfri lawn_mower entity der bruges til at registrere hvornår robotten sidst har klippet.",
           "robot_mower_allow_night": "Hvis slået fra, vil klipning ikke blive anbefalet mellem solnedgang og solopgang.",
-          "mowing_update_frequency": "Vælg hvor længe hver klippeanbefaling skal gælde.",
-          "daily_update_hour": "Tidligste time hvor klipning kan anbefales, når natklipning er slået fra. Bruges også som daglig opdateringstid ved daglig frekvens. Vælg 0-23, for eksempel 8 for kl. 08:00.",
-          "historical_rain_threshold": "Mindste historiske regnmængde der alene kan tælle som nok fugt. Kan vælges fra 5 til 15 mm.",
-          "forecast_rain_threshold": "Mindste forventede regnmængde der alene kan tælle som nok kommende fugt. Kan vælges fra 10 til 25 mm.",
+          "mowing_update_frequency": "Hvor ofte klipperådet opdateres. Den anbefalede klippefrekvens vises separat.",
+          "daily_update_hour": "Bestemmer kun tidspunktet for den daglige opdatering af klipperådet.",
+          "historical_rain_threshold": "Observeret regn bruges som skøn for jordfugt, når en jordfugtighedssensor mangler. Vælg 5–15 mm.",
+          "forecast_rain_threshold": "Grænse for kommende fugt i tørkevurderingen. Forventet regn gør ikke jorden fugtig nu.",
           "historical_rain_days": "Antal dage bagud der bruges til historisk regn. Kan vælges fra 3 til 10 dage.",
-          "forecast_rain_days": "Antal dage frem der bruges til forecast-regn. Kan vælges fra 2 til 7 dage."
+          "forecast_rain_days": "Antal dage frem der bruges til forecast-regn. Kan vælges fra 2 til 7 dage.",
+          "mowing_start_hour": "Selvstændig startgrænse for klipning, også når natklipning er tilladt. Standard kl. 09. Vent altid til græsset er tørt.",
+          "fertilizer_type": "Almindelig gødning vurderes i marts–september; efterårsgødning kun i september–oktober. Begge kræver aktiv vækst og egnede forhold.",
+          "fertilizer_effect_days": "Brug produktets angivne virkningsperiode. Standard 60 dage er kun et udgangspunkt; udløbet tid dokumenterer ikke næringsmangel.",
+          "fertilizer_dose_g_m2": "Mængden ved den seneste gødskning. Lad feltet være tomt, hvis den ikke kendes; integrationen anbefaler da ikke automatisk mere.",
+          "fertilizer_label_dose_g_m2": "Dosering fra produktets etiket, som den tilførte mængde sammenholdes med. Følg altid etiketten.",
+          "water_during_drought": "Angiver din vandingspraksis. Det dokumenterer ikke, at jorden er fugtig; klipning og gødning kræver observeret fugtstøtte."
         }
       }
     },
@@ -100,7 +123,8 @@
       "height_range": "Minimum græshøjde skal være lavere end maksimum græshøjde.",
       "invalid_hour": "Tidspunktet skal være en hel time fra 0 til 23.",
       "invalid_mowing_update_frequency": "Vælg en gyldig opdateringsfrekvens for klippeanbefalingen.",
-      "invalid_rain_setting": "Regnindstillingen er uden for det tilladte interval."
+      "invalid_rain_setting": "Regnindstillingen er uden for det tilladte interval.",
+      "invalid_fertilizer_setting": "Kontrollér gødningstype, virkningsperiode (7–180 dage) og mængder (0–200 g/m²)."
     }
   },
   "selector": {
@@ -152,6 +176,12 @@
         "normal": "Normal",
         "high": "Høj"
       }
+    },
+    "fertilizer_type": {
+      "options": {
+        "regular": "Almindelig",
+        "autumn": "Efterår"
+      }
     }
   },
   "device": {
@@ -163,6 +193,9 @@
     "date": {
       "last_fertilized_date": {
         "name": "Seneste gødningsdato"
+      },
+      "last_mowed_date": {
+        "name": "Seneste manuelle klippedato"
       }
     },
     "number": {
@@ -174,6 +207,9 @@
       },
       "fertilizer_k_percent": {
         "name": "Kalium i gødning"
+      },
+      "estimated_grass_height": {
+        "name": "Forventet græshøjde"
       }
     },
     "sensor": {
@@ -227,6 +263,18 @@
           },
           "mowing_allowed_from_hour": {
             "name": "Klipning tilladt fra time"
+          },
+          "gradual_cut_plan_mm": {
+            "name": "Plan for gradvis klippehøjde i mm"
+          },
+          "gradual_lowering_required": {
+            "name": "Gradvis sænkning nødvendig"
+          },
+          "next_cut_min_interval_days": {
+            "name": "Mindste interval til næste sænkning"
+          },
+          "drought_recovery": {
+            "name": "Genoptagelse efter tørke"
           }
         }
       },
@@ -277,7 +325,8 @@
           "stopped": "Stoppet",
           "slow": "Langsom",
           "normal": "Normal",
-          "fast": "Hurtig"
+          "fast": "Hurtig",
+          "unknown": "Ukendt"
         },
         "state_attributes": {
           "estimated_mm_per_day": {
@@ -296,13 +345,13 @@
             "name": "Årsag"
           },
           "mowing_season_status": {
-            "name": "Klippesæsonens status"
+            "name": "Temperaturstatus for klipning"
           },
           "mowing_season_label": {
-            "name": "Sæsonbesked"
+            "name": "Besked om klippepause"
           },
           "mowing_season_reason": {
-            "name": "Årsag til sæsonstatus"
+            "name": "Årsag til temperaturstatus"
           },
           "winter_storage_recommended": {
             "name": "Vinteropbevaring anbefalet"
@@ -329,7 +378,7 @@
             "name": "Temperaturgrænse for klippepause"
           },
           "growth_resume_temperature": {
-            "name": "Temperaturgrænse for sæsonstart"
+            "name": "Temperatur for genoptagelse af klipning"
           }
         }
       },
@@ -356,6 +405,27 @@
           },
           "reason": {
             "name": "Årsag"
+          },
+          "assessment_known": {
+            "name": "Vurderingsgrundlag tilstrækkeligt"
+          },
+          "missing_information": {
+            "name": "Manglende oplysninger"
+          },
+          "application_known": {
+            "name": "Seneste gødskning registreret"
+          },
+          "effect_days": {
+            "name": "Virkningsperiode i dage"
+          },
+          "nitrogen_g_m2": {
+            "name": "Tilført kvælstof i g/m²"
+          },
+          "need_confirmed": {
+            "name": "Næringsbehov dokumenteret"
+          },
+          "conditions_suitable": {
+            "name": "Forhold egnede"
           }
         }
       },
@@ -378,10 +448,33 @@
             "name": "Årsag"
           },
           "mowing_season_status": {
-            "name": "Klippesæsonens status"
+            "name": "Temperaturstatus for klipning"
           },
           "winter_storage_recommended": {
             "name": "Vinteropbevaring anbefalet"
+          },
+          "mowing_season_label": {
+            "name": "Besked om klippepause"
+          },
+          "mowing_season_reason": {
+            "name": "Årsag til temperaturstatus"
+          },
+          "growth_resume_temperature": {
+            "name": "Temperatur for genoptagelse af klipning"
+          }
+        }
+      },
+      "recommended_mowing_frequency": {
+        "name": "Anbefalet klippefrekvens",
+        "state_attributes": {
+          "recommended_cuts_per_week": {
+            "name": "Anbefalede klippedage om ugen"
+          },
+          "min_interval_days": {
+            "name": "Mindste interval i dage"
+          },
+          "frequency_guidance": {
+            "name": "Vejledning om klippefrekvens"
           }
         }
       }
@@ -398,6 +491,27 @@
           },
           "reason": {
             "name": "Årsag"
+          },
+          "assessment_known": {
+            "name": "Vurderingsgrundlag tilstrækkeligt"
+          },
+          "missing_information": {
+            "name": "Manglende oplysninger"
+          },
+          "application_known": {
+            "name": "Seneste gødskning registreret"
+          },
+          "effect_days": {
+            "name": "Virkningsperiode i dage"
+          },
+          "nitrogen_g_m2": {
+            "name": "Tilført kvælstof i g/m²"
+          },
+          "need_confirmed": {
+            "name": "Næringsbehov dokumenteret"
+          },
+          "conditions_suitable": {
+            "name": "Forhold egnede"
           }
         }
       },
@@ -415,6 +529,24 @@
           },
           "reason": {
             "name": "Årsag"
+          },
+          "recommended_cuts_per_week": {
+            "name": "Anbefalede klippedage om ugen"
+          },
+          "min_interval_days": {
+            "name": "Mindste interval i dage"
+          },
+          "frequency_guidance": {
+            "name": "Vejledning om klippefrekvens"
+          },
+          "next_mowing_not_before": {
+            "name": "Næste klipning tidligst"
+          },
+          "height_basis": {
+            "name": "Grundlag for forventet højde"
+          },
+          "estimated_grass_height": {
+            "name": "Forventet græshøjde"
           }
         }
       },
@@ -440,13 +572,28 @@
             "name": "Sidste registrerede tur"
           },
           "estimated_grass_height": {
-            "name": "Estimeret græshøjde"
+            "name": "Forventet græshøjde"
           },
           "catch_up": {
             "name": "Catch-up"
           },
           "reason": {
             "name": "Årsag"
+          },
+          "recommended_cuts_per_week": {
+            "name": "Anbefalede klippedage om ugen"
+          },
+          "min_interval_days": {
+            "name": "Mindste interval i dage"
+          },
+          "frequency_guidance": {
+            "name": "Vejledning om klippefrekvens"
+          },
+          "next_mowing_not_before": {
+            "name": "Næste klipning tidligst"
+          },
+          "height_basis": {
+            "name": "Grundlag for forventet højde"
           }
         }
       },

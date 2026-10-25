@@ -17,7 +17,7 @@
           "robot_mower_entity": "Robotic mower entity",
           "robot_mower_allow_night": "Allow mowing at night",
           "mowing_update_frequency": "Mowing recommendation update frequency",
-          "daily_update_hour": "Daily mowing assessment hour",
+          "daily_update_hour": "Daily assessment hour",
           "historical_rain_threshold": "Historical rain threshold",
           "forecast_rain_threshold": "Forecast rain threshold",
           "historical_rain_days": "Historical rain days",
@@ -28,18 +28,29 @@
           "min_grass_height": "Minimum grass height",
           "max_grass_height": "Maximum grass height",
           "water_during_drought": "Water during dry periods",
-          "watering_level": "Watering level"
+          "watering_level": "Watering level",
+          "mowing_start_hour": "Earliest mowing start",
+          "fertilizer_type": "Fertilizer type",
+          "fertilizer_effect_days": "Label effect period",
+          "fertilizer_dose_g_m2": "Last applied fertilizer dose (g/m²)",
+          "fertilizer_label_dose_g_m2": "Label fertilizer dose (g/m²)"
         },
         "data_description": {
           "rain_sensor": "Choose a sensor that shows total rain today so far, not current rain or rain per hour.",
           "robot_mower_entity": "Optional lawn_mower entity used to detect when the robot last mowed.",
           "robot_mower_allow_night": "When disabled, mowing will not be recommended between sunset and sunrise.",
-          "mowing_update_frequency": "Choose how long each mowing recommendation should stay in effect.",
-          "daily_update_hour": "Earliest hour mowing can be recommended when night mowing is disabled. Also used as the daily update time when frequency is once per day. Choose 0-23, for example 8 for 08:00.",
-          "historical_rain_threshold": "Minimum historical rain that can count as enough moisture by itself. Choose 5 to 15 mm.",
-          "forecast_rain_threshold": "Minimum forecast rain that can count as enough upcoming moisture by itself. Choose 10 to 25 mm.",
+          "mowing_update_frequency": "How often mowing advice is refreshed. Recommended cuts per week are shown separately.",
+          "daily_update_hour": "Controls only the daily mowing advice refresh time.",
+          "historical_rain_threshold": "Observed rain estimates soil moisture when no soil moisture sensor is available. Choose 5–15 mm.",
+          "forecast_rain_threshold": "Upcoming moisture threshold for drought assessment. Forecast rain does not make the soil moist now.",
           "historical_rain_days": "Number of past days used for historical rain. Choose 3 to 10 days.",
-          "forecast_rain_days": "Number of future days used for forecast rain. Choose 2 to 7 days."
+          "forecast_rain_days": "Number of future days used for forecast rain. Choose 2 to 7 days.",
+          "mowing_start_hour": "Independent start time, also when night mowing is enabled. Defaults to 09:00. Always wait until the grass is dry.",
+          "fertilizer_type": "Regular fertilizer is assessed in March–September; autumn fertilizer only in September–October. Both require active growth and suitable conditions.",
+          "fertilizer_effect_days": "Use the product effect period. The 60-day default is only a starting point; elapsed time does not prove nutrient deficiency.",
+          "fertilizer_dose_g_m2": "Dose at the last application. Leave empty if unknown; the integration will not automatically recommend more.",
+          "fertilizer_label_dose_g_m2": "Product label dose used to interpret the applied amount. Always follow the label.",
+          "water_during_drought": "Describes your watering practice. It does not establish moist soil; mowing and fertilizing require observed moisture support."
         }
       }
     },
@@ -47,7 +58,8 @@
       "height_range": "Minimum grass height must be lower than maximum grass height.",
       "invalid_hour": "The time must be a whole hour from 0 to 23.",
       "invalid_mowing_update_frequency": "Choose a valid mowing recommendation update frequency.",
-      "invalid_rain_setting": "Rain setting is outside the allowed range."
+      "invalid_rain_setting": "Rain setting is outside the allowed range.",
+      "invalid_fertilizer_setting": "Check fertilizer type, effect period (7–180 days) and doses (0–200 g/m²)."
     },
     "abort": {
       "already_configured": "This lawn is already configured."
@@ -70,7 +82,7 @@
           "robot_mower_entity": "Robotic mower entity",
           "robot_mower_allow_night": "Allow mowing at night",
           "mowing_update_frequency": "Mowing recommendation update frequency",
-          "daily_update_hour": "Daily mowing assessment hour",
+          "daily_update_hour": "Daily assessment hour",
           "historical_rain_threshold": "Historical rain threshold",
           "forecast_rain_threshold": "Forecast rain threshold",
           "historical_rain_days": "Historical rain days",
@@ -81,18 +93,29 @@
           "min_grass_height": "Minimum grass height",
           "max_grass_height": "Maximum grass height",
           "water_during_drought": "Water during dry periods",
-          "watering_level": "Watering level"
+          "watering_level": "Watering level",
+          "mowing_start_hour": "Earliest mowing start",
+          "fertilizer_type": "Fertilizer type",
+          "fertilizer_effect_days": "Label effect period",
+          "fertilizer_dose_g_m2": "Last applied fertilizer dose (g/m²)",
+          "fertilizer_label_dose_g_m2": "Label fertilizer dose (g/m²)"
         },
         "data_description": {
           "rain_sensor": "Choose a sensor that shows total rain today so far, not current rain or rain per hour.",
           "robot_mower_entity": "Optional lawn_mower entity used to detect when the robot last mowed.",
           "robot_mower_allow_night": "When disabled, mowing will not be recommended between sunset and sunrise.",
-          "mowing_update_frequency": "Choose how long each mowing recommendation should stay in effect.",
-          "daily_update_hour": "Earliest hour mowing can be recommended when night mowing is disabled. Also used as the daily update time when frequency is once per day. Choose 0-23, for example 8 for 08:00.",
-          "historical_rain_threshold": "Minimum historical rain that can count as enough moisture by itself. Choose 5 to 15 mm.",
-          "forecast_rain_threshold": "Minimum forecast rain that can count as enough upcoming moisture by itself. Choose 10 to 25 mm.",
+          "mowing_update_frequency": "How often mowing advice is refreshed. Recommended cuts per week are shown separately.",
+          "daily_update_hour": "Controls only the daily mowing advice refresh time.",
+          "historical_rain_threshold": "Observed rain estimates soil moisture when no soil moisture sensor is available. Choose 5–15 mm.",
+          "forecast_rain_threshold": "Upcoming moisture threshold for drought assessment. Forecast rain does not make the soil moist now.",
           "historical_rain_days": "Number of past days used for historical rain. Choose 3 to 10 days.",
-          "forecast_rain_days": "Number of future days used for forecast rain. Choose 2 to 7 days."
+          "forecast_rain_days": "Number of future days used for forecast rain. Choose 2 to 7 days.",
+          "mowing_start_hour": "Independent start time, also when night mowing is enabled. Defaults to 09:00. Always wait until the grass is dry.",
+          "fertilizer_type": "Regular fertilizer is assessed in March–September; autumn fertilizer only in September–October. Both require active growth and suitable conditions.",
+          "fertilizer_effect_days": "Use the product effect period. The 60-day default is only a starting point; elapsed time does not prove nutrient deficiency.",
+          "fertilizer_dose_g_m2": "Dose at the last application. Leave empty if unknown; the integration will not automatically recommend more.",
+          "fertilizer_label_dose_g_m2": "Product label dose used to interpret the applied amount. Always follow the label.",
+          "water_during_drought": "Describes your watering practice. It does not establish moist soil; mowing and fertilizing require observed moisture support."
         }
       }
     },
@@ -100,7 +123,8 @@
       "height_range": "Minimum grass height must be lower than maximum grass height.",
       "invalid_hour": "The time must be a whole hour from 0 to 23.",
       "invalid_mowing_update_frequency": "Choose a valid mowing recommendation update frequency.",
-      "invalid_rain_setting": "Rain setting is outside the allowed range."
+      "invalid_rain_setting": "Rain setting is outside the allowed range.",
+      "invalid_fertilizer_setting": "Check fertilizer type, effect period (7–180 days) and doses (0–200 g/m²)."
     }
   },
   "selector": {
@@ -152,6 +176,12 @@
         "normal": "Normal",
         "high": "High"
       }
+    },
+    "fertilizer_type": {
+      "options": {
+        "regular": "Regular",
+        "autumn": "Autumn"
+      }
     }
   },
   "device": {
@@ -163,6 +193,9 @@
     "date": {
       "last_fertilized_date": {
         "name": "Last fertilized date"
+      },
+      "last_mowed_date": {
+        "name": "Last manual mowing date"
       }
     },
     "number": {
@@ -174,6 +207,9 @@
       },
       "fertilizer_k_percent": {
         "name": "Fertilizer potassium"
+      },
+      "estimated_grass_height": {
+        "name": "Expected grass height"
       }
     },
     "sensor": {
@@ -227,6 +263,18 @@
           },
           "mowing_allowed_from_hour": {
             "name": "Mowing allowed from hour"
+          },
+          "gradual_cut_plan_mm": {
+            "name": "Gradual cutting settings in mm"
+          },
+          "gradual_lowering_required": {
+            "name": "Gradual lowering required"
+          },
+          "next_cut_min_interval_days": {
+            "name": "Minimum interval before next lowering"
+          },
+          "drought_recovery": {
+            "name": "Recovery after drought"
           }
         }
       },
@@ -277,7 +325,8 @@
           "stopped": "Stopped",
           "slow": "Slow",
           "normal": "Normal",
-          "fast": "Fast"
+          "fast": "Fast",
+          "unknown": "Unknown"
         },
         "state_attributes": {
           "estimated_mm_per_day": {
@@ -296,13 +345,13 @@
             "name": "Reason"
           },
           "mowing_season_status": {
-            "name": "Mowing season status"
+            "name": "Mowing temperature status"
           },
           "mowing_season_label": {
-            "name": "Season message"
+            "name": "Mowing pause message"
           },
           "mowing_season_reason": {
-            "name": "Season status reason"
+            "name": "Temperature status reason"
           },
           "winter_storage_recommended": {
             "name": "Winter storage recommended"
@@ -329,7 +378,7 @@
             "name": "Mowing pause temperature threshold"
           },
           "growth_resume_temperature": {
-            "name": "Season start temperature threshold"
+            "name": "Mowing restart temperature"
           }
         }
       },
@@ -356,6 +405,27 @@
           },
           "reason": {
             "name": "Reason"
+          },
+          "assessment_known": {
+            "name": "Assessment has sufficient data"
+          },
+          "missing_information": {
+            "name": "Missing information"
+          },
+          "application_known": {
+            "name": "Previous application recorded"
+          },
+          "effect_days": {
+            "name": "Effect period in days"
+          },
+          "nitrogen_g_m2": {
+            "name": "Applied nitrogen in g/m²"
+          },
+          "need_confirmed": {
+            "name": "Nutrient need confirmed"
+          },
+          "conditions_suitable": {
+            "name": "Conditions suitable"
           }
         }
       },
@@ -378,10 +448,33 @@
             "name": "Reason"
           },
           "mowing_season_status": {
-            "name": "Mowing season status"
+            "name": "Mowing temperature status"
           },
           "winter_storage_recommended": {
             "name": "Winter storage recommended"
+          },
+          "mowing_season_label": {
+            "name": "Mowing pause message"
+          },
+          "mowing_season_reason": {
+            "name": "Temperature status reason"
+          },
+          "growth_resume_temperature": {
+            "name": "Mowing restart temperature"
+          }
+        }
+      },
+      "recommended_mowing_frequency": {
+        "name": "Recommended mowing frequency",
+        "state_attributes": {
+          "recommended_cuts_per_week": {
+            "name": "Recommended mowing days per week"
+          },
+          "min_interval_days": {
+            "name": "Minimum interval in days"
+          },
+          "frequency_guidance": {
+            "name": "Mowing frequency guidance"
           }
         }
       }
@@ -398,6 +491,27 @@
           },
           "reason": {
             "name": "Reason"
+          },
+          "assessment_known": {
+            "name": "Assessment has sufficient data"
+          },
+          "missing_information": {
+            "name": "Missing information"
+          },
+          "application_known": {
+            "name": "Previous application recorded"
+          },
+          "effect_days": {
+            "name": "Effect period in days"
+          },
+          "nitrogen_g_m2": {
+            "name": "Applied nitrogen in g/m²"
+          },
+          "need_confirmed": {
+            "name": "Nutrient need confirmed"
+          },
+          "conditions_suitable": {
+            "name": "Conditions suitable"
           }
         }
       },
@@ -415,6 +529,24 @@
           },
           "reason": {
             "name": "Reason"
+          },
+          "recommended_cuts_per_week": {
+            "name": "Recommended mowing days per week"
+          },
+          "min_interval_days": {
+            "name": "Minimum interval in days"
+          },
+          "frequency_guidance": {
+            "name": "Mowing frequency guidance"
+          },
+          "next_mowing_not_before": {
+            "name": "Next mowing not before"
+          },
+          "height_basis": {
+            "name": "Expected height basis"
+          },
+          "estimated_grass_height": {
+            "name": "Expected grass height"
           }
         }
       },
@@ -440,13 +572,28 @@
             "name": "Last registered run"
           },
           "estimated_grass_height": {
-            "name": "Estimated grass height"
+            "name": "Expected grass height"
           },
           "catch_up": {
             "name": "Catch-up"
           },
           "reason": {
             "name": "Reason"
+          },
+          "recommended_cuts_per_week": {
+            "name": "Recommended mowing days per week"
+          },
+          "min_interval_days": {
+            "name": "Minimum interval in days"
+          },
+          "frequency_guidance": {
+            "name": "Mowing frequency guidance"
+          },
+          "next_mowing_not_before": {
+            "name": "Next mowing not before"
+          },
+          "height_basis": {
+            "name": "Expected height basis"
           }
         }
       },

@@ -56,3 +56,12 @@ SHADE_LEVELS = ["low", "medium", "high"]
 SOIL_TYPES = ["sandy", "normal", "clay"]
 CARE_LEVELS = ["low", "normal", "high"]
 WATERING_LEVELS = ["low", "normal", "high"]
+
+# Product label settings and an independent mowing start time.
+CONF_MOWING_START_HOUR = "mowing_start_hour"
+DEFAULT_MOWING_START_HOUR = 9
+CONF_FERTILIZER_TYPE = "fertilizer_type"
+CONF_FERTILIZER_EFFECT_DAYS = "fertilizer_effect_days"
+CONF_FERTILIZER_DOSE = "fertilizer_dose_g_m2"
+CONF_FERTILIZER_LABEL_DOSE = "fertilizer_label_dose_g_m2"
+DEFAULT_FERTILIZER_EFFECT_DAYS = 60

@@ -1,4 +1,4 @@
-"""Temperature-based mowing season advice, separate from today's suitability."""
+"""Temperature-based mowing pauses, separate from today's suitability."""
 
 from __future__ import annotations
 
@@ -13,7 +13,11 @@ GROWTH_RESUME_TEMPERATURE = 8.0
 
 def growth_temperature(weather: LawnWeatherData) -> float | None:
     """Use the cooler of current air and the recent mean to avoid warm spikes."""
-    known = [v for v in (weather.temperature, weather.historical_temperature) if v is not None]
+    known = [
+        v
+        for v in (weather.temperature, weather.historical_temperature)
+        if v is not None
+    ]
     return min(known) if known else None
 
 
@@ -26,7 +30,10 @@ def mowing_season_status(
         status = "winter_pause"
     elif temperature is None:
         status = "unknown"
-    elif weather.weather_state in ("snowy", "snowy-rainy") or temperature <= GROWTH_STOP_TEMPERATURE:
+    elif (
+        weather.weather_state in ("snowy", "snowy-rainy")
+        or temperature <= GROWTH_STOP_TEMPERATURE
+    ):
         persistent_cold = (
             weather.month in (9, 10)
             and weather.seasonal_temperature_coverage_hours >= 70
@@ -58,25 +65,25 @@ def _texts(language: str) -> dict[str, str]:
     if language.lower().startswith("da"):
         return {
             "winter_pause": "Vinterpause – robotten kan pakkes væk.",
-            "winter_pause_reason": "Uden for klippesæsonen eller vedvarende efterårskulde. Rengør og opbevar robotten efter producentens anvisninger.",
+            "winter_pause_reason": "Vintermåneder eller vedvarende efterårskulde. Rengør og opbevar robotten efter producentens anvisninger.",
             "cold_pause": "Kuldepause – vent med klipning.",
             "cold_pause_reason": "Kulde eller sne stopper klipning. En kort kuldeperiode er ikke i sig selv grund til at pakke robotten væk for vinteren.",
-            "warming_up": "Afventer varmere vejr før sæsonstart.",
-            "warming_up_reason": "Efter pausen skal både aktuel temperatur og tilgængeligt døgnmiddel nå 8 °C, før klippesæsonen meldes klar.",
-            "ready": "Klar til klippesæsonen.",
-            "ready_reason": "Sæson og temperatur tillader klipning. Dagens regn, fugt, tørke og tidsvindue kan stadig kræve pause.",
+            "warming_up": "Afventer varmere vejr før klipning.",
+            "warming_up_reason": "Efter pausen skal både aktuel temperatur og tilgængeligt døgnmiddel nå 8 °C, før temperaturpausen ophæves.",
+            "ready": "Temperaturen tillader klipning.",
+            "ready_reason": "Temperaturkontrollen er bestået. Dagens regn, fugt, tørke og tidsvindue kan stadig kræve pause.",
             "unknown": "Afventer temperaturdata.",
             "unknown_reason": "Temperaturdata mangler, så sæsonens temperaturstatus kan ikke vurderes.",
         }
     return {
         "winter_pause": "Winter pause – the robot can be stored.",
-        "winter_pause_reason": "Outside mowing season or persistently cold autumn weather. Clean and store the robot following the manufacturer's instructions.",
+        "winter_pause_reason": "Winter months or persistently cold autumn weather. Clean and store the robot following the manufacturer's instructions.",
         "cold_pause": "Cold pause – wait before mowing.",
         "cold_pause_reason": "Cold or snow prevents mowing. A brief cold spell alone is not a reason for winter storage.",
-        "warming_up": "Waiting for warmer weather before season start.",
-        "warming_up_reason": "After a pause, current temperature and the available daily mean must both reach 8 °C before the mowing season is ready.",
-        "ready": "Ready for the mowing season.",
-        "ready_reason": "Season and temperature permit mowing. Today's rain, moisture, drought and time window can still require a pause.",
+        "warming_up": "Waiting for warmer weather before mowing.",
+        "warming_up_reason": "After a pause, current temperature and the available daily mean must both reach 8 °C before the temperature pause ends.",
+        "ready": "Temperature permits mowing.",
+        "ready_reason": "The temperature check has passed. Today's rain, moisture, drought and time window can still require a pause.",
         "unknown": "Waiting for temperature data.",
         "unknown_reason": "Temperature data is missing, so temperature readiness cannot be assessed.",
     }

@@ -26,6 +26,7 @@ from .mowing import (
     calculate_growth_rate,
     calculate_mowing_advice,
     calculate_robot_mower_advice,
+    mowing_frequency,
 )
 from .season import mowing_season_status
 
@@ -41,18 +42,20 @@ MANUAL_MONTHLY_MIN_HEIGHT = (60, 60, 60, 60, 50, 50, 50, 50, 50, 60, 60, 60)
 
 
 def build_advice(
-    config: dict[str, Any], weather: LawnWeatherData, language: str,
+    config: dict[str, Any],
+    weather: LawnWeatherData,
+    language: str,
     previous_season_status: str | None = None,
 ) -> dict[str, Any]:
     """Build all lawn advice from config and weather inputs."""
     height = recommended_grass_height(config, weather, language)
     drought = calculate_drought_risk(config, weather, language)
     growth = calculate_growth_rate(config, weather, drought, language)
-    growth["attributes"].update(mowing_season_status(weather, language, previous_season_status))
-    fertilizer = calculate_fertilizer_score(config, weather, drought, growth, language)
-    mowing = calculate_mowing_advice(
-        config, weather, drought, growth, height, language
+    growth["attributes"].update(
+        mowing_season_status(weather, language, previous_season_status)
     )
+    fertilizer = calculate_fertilizer_score(config, weather, drought, growth, language)
+    mowing = calculate_mowing_advice(config, weather, drought, growth, height, language)
     robot_mower = calculate_robot_mower_advice(
         config, weather, drought, growth, mowing, language
     )
@@ -68,14 +71,17 @@ def build_advice(
     )
 
     return {
+        "recommended_mowing_frequency": mowing_frequency(
+            config, weather, growth, language
+        ),
         "recommended_grass_height": height,
         "drought_risk": drought,
         "growth_rate": growth,
         "fertilizer_score": fertilizer,
         "fertilizer_day": {
-            "value": fertilizer["score"] < fertilizer["threshold"]
-            and not fertilizer["blocking_factors"],
+            "value": fertilizer["recommended"],
             "attributes": {
+                **fertilizer["attributes"],
                 "score": fertilizer["score"],
                 "blocking_factors": fertilizer["blocking_factors"],
                 "reason": fertilizer["reason"],
@@ -99,7 +105,8 @@ def recommended_grass_height(
         config.get(CONF_MAX_GRASS_HEIGHT, DEFAULT_MAX_GRASS_HEIGHT)
     )
     monthly_heights = (
-        ROBOT_MONTHLY_MIN_HEIGHT if config.get(CONF_ROBOTIC_MOWER)
+        ROBOT_MONTHLY_MIN_HEIGHT
+        if config.get(CONF_ROBOTIC_MOWER)
         else MANUAL_MONTHLY_MIN_HEIGHT
     )
     seasonal_min_height = monthly_heights[weather.month - 1]
@@ -121,12 +128,8 @@ def recommended_grass_height(
         min_height += 5
         reasons.append(text["high_shade_height"])
 
-    if weather.month in (6, 7, 8):
-        min_height += 5
-        reasons.append(text["summer_height"])
-
     forecast_rain = weather.forecast_rain_5_days
-    rain_total = rain_moisture_total(weather)
+    rain_total = weather.historical_rain or 0.0
     rain_threshold = rain_moisture_threshold(config)
 
     # Protective minima take precedence over the user's preferred maximum.
@@ -154,6 +157,9 @@ def recommended_grass_height(
         text,
     )
 
+    if weather.month == 10:
+        target = max_height
+        reasons.append(text["final_cut"])
     target = max(min_height, min(max_height, target))
     return {
         "value": target,
@@ -172,7 +178,8 @@ def recommended_grass_height(
             "forecast_rain": forecast_rain,
             "forecast_rain_next_24h": weather.forecast_rain_next_24h,
             "forecast_drying_pressure_72h": weather.forecast_drying_pressure_72h,
-            "rain_total": rain_total,
+            "rain_total": rain_moisture_total(weather),
+            "observed_rain_total": rain_total,
             "reason": " ".join(reasons),
         },
     }
@@ -190,7 +197,6 @@ def _apply_forecast_height_protection(
     """Protect the lawn from being cut too low before a forecast dry spell."""
     midpoint = _round_to_nearest_5((min_height + max_height) / 2)
     recent_rain = weather.historical_rain_24h or 0.0
-    imminent_rain = weather.forecast_rain_next_24h or 0.0
     drying_pressure = weather.forecast_drying_pressure_72h or 0.0
     meaningful_water = historical_rain_threshold(config)
     soil_moisture = weather.soil_moisture
@@ -199,9 +205,8 @@ def _apply_forecast_height_protection(
         reasons.append(text["low_soil_moisture_height"])
         return max_height
 
-    moisture_protected = (
-        config.get(CONF_WATER_DURING_DROUGHT)
-        or (soil_moisture is not None and soil_moisture >= 35)
+    moisture_protected = config.get(CONF_WATER_DURING_DROUGHT) or (
+        soil_moisture is not None and soil_moisture >= 35
     )
     if drying_pressure >= HIGH_FORECAST_DRYING_PRESSURE and not moisture_protected:
         reasons.append(text["high_forecast_drying_height"])
@@ -215,7 +220,7 @@ def _apply_forecast_height_protection(
         reasons.append(text["moderate_forecast_drying_height"])
         return midpoint
 
-    if recent_rain >= meaningful_water or imminent_rain >= meaningful_water:
+    if recent_rain >= meaningful_water:
         reasons.append(text["near_term_water_height"])
         return min_height
 
@@ -237,16 +242,6 @@ def general_recommendation(
     season = growth["attributes"]
     status = season.get("mowing_season_status")
     if status and status != "ready":
-        return {
-            "value": season["mowing_season_label"],
-            "attributes": {
-                "actions": [season["mowing_season_label"]],
-                "reason": season["mowing_season_reason"],
-                "mowing_season_status": status,
-                "winter_storage_recommended": season["winter_storage_recommended"],
-            },
-        }
-    if status == "ready":
         actions.append(season["mowing_season_label"])
         reasons.append(season["mowing_season_reason"])
 
@@ -258,22 +253,35 @@ def general_recommendation(
         reasons.append(
             text["robot_mow_reason"] if robotic_mower else text["mow_reason"]
         )
-    if (
-        fertilizer["score"] < fertilizer["threshold"]
-        and not fertilizer["blocking_factors"]
-    ):
+    if fertilizer["recommended"] is True:
         actions.append(text["fertilize"])
-        reasons.append(text["fertilizer_score"].format(score=fertilizer["score"]))
-    if not actions or (status == "ready" and len(actions) == 1):
+    elif fertilizer["blocking_factors"]:
+        actions.append(text["wait_fertilizer"])
+    elif fertilizer["recommended"] is None:
+        actions.append(text["unknown_fertilizer"])
+    reasons.append(fertilizer["reason"])
+    if not mowing["value"]:
+        if growth["value"] in ("stopped", "slow") and status == "ready":
+            actions.insert(0, text["low_growth_pause"])
+        elif status == "ready":
+            actions.insert(0, text["wait_mowing"])
+        reasons.append(mowing["attributes"].get("reason", ""))
+    if not actions:
         actions.append(text["monitor"])
-        reasons.append(text["growth"].format(growth=text[growth["value"]]))
+    if mowing["value"]:
+        guidance = mowing["attributes"].get("frequency_guidance")
+        if guidance:
+            reasons.append(guidance)
+    reasons.append(text["maintenance"])
 
     return {
         "value": " ".join(actions),
         "attributes": {
             "actions": actions,
             "mowing_season_status": status,
-            "winter_storage_recommended": False,
+            "winter_storage_recommended": season.get(
+                "winter_storage_recommended", False
+            ),
             "reason": " ".join(reasons),
         },
     }
@@ -293,10 +301,16 @@ def _texts(language: str) -> dict[str, str]:
             "water": "Hold pause med klipning under tørke. Hvis du vander, så vand sjældent og grundigt, ca. 20 mm ad gangen.",
             "drought": "Tørkerisikoen er {risk}.",
             "mow": "Det er egnet at slå græs i dag.",
-            "mow_reason": "Forholdene er tørre nok, og væksten understøtter klipning.",
+            "mow_reason": "Væksten understøtter klipning; kontrollér at græsset er tørt.",
             "robot_mow": "Robotplæneklipperen kan køre i dag.",
             "robot_mow_reason": "Robotklipperens egne stopfaktorer er ikke aktive.",
-            "fertilize": "Forholdene er gode til gødning.",
+            "fertilize": "Gødning kan overvejes ved behov; følg produktets anvisning.",
+            "wait_mowing": "Vent med klipning.",
+            "wait_fertilizer": "Vent med gødning.",
+            "unknown_fertilizer": "Gødningsbehovet kan ikke vurderes endnu.",
+            "low_growth_pause": "Væksten er lav; afvent behov for klipning.",
+            "final_cut": "Bevar en høj indstilling ved den sidste klipning. Fjern blade og brug skarpe knive.",
+            "maintenance": "Brug skarpe knive. Kontrollér robotknive jævnligt, typisk hver 3.–4. uge efter model og slid. Slib almindelig klippers kniv i juni og før sidste klipning. Fjern eller fordel klatter af afklip, fjern tætte lag blade og variér kørespor.",
             "fertilizer_score": "Gødningsscoren er {score}.",
             "monitor": "Hold øje med forholdene.",
             "growth": "Væksten er {growth}, og der anbefales ingen større handling.",
@@ -313,10 +327,10 @@ def _texts(language: str) -> dict[str, str]:
             "shade_height": "Skyggeplæner har brug for ekstra bladmasse for stærkere vækst.",
             "high_shade_height": "Meget skygge øger den anbefalede klippehøjde.",
             "summer_height": "Sommerstress taler for en højere klippehøjde.",
-            "very_low_rain_height": "Samlet regn er langt under den valgte fugtgrænse, så målet holdes på maksimumhøjden.",
-            "medium_rain_height": "Samlet regn er under den valgte fugtgrænse, så målet flyttes til medianhøjden.",
-            "good_rain_height": "Samlet regn opfylder den valgte fugtgrænse, så minimumhøjden er egnet.",
-            "near_term_water_height": "Nok regn er faldet eller forventes inden for 24 timer, så en lavere klippehøjde er forsvarlig.",
+            "very_low_rain_height": "Observeret regn er langt under den valgte fugtgrænse, så målet holdes på maksimumhøjden.",
+            "medium_rain_height": "Observeret regn er under den valgte fugtgrænse, så målet flyttes til medianhøjden.",
+            "good_rain_height": "Observeret regn opfylder den valgte fugtgrænse, så minimumhøjden er egnet.",
+            "near_term_water_height": "Nok regn er faldet inden for 24 timer, så en lavere klippehøjde er forsvarlig.",
             "low_soil_moisture_height": "Lav jordfugtighed holder klippehøjden på maksimum for at beskytte plænen.",
             "high_forecast_drying_height": "Sol, varme og begrænset regn de næste tre døgn holder klippehøjden på maksimum.",
             "moderate_forecast_drying_height": "Forventet udtørring de næste tre døgn hæver klippehøjden til midten af intervallet.",
@@ -330,10 +344,16 @@ def _texts(language: str) -> dict[str, str]:
         "water": "Pause mowing during drought. If watering, water infrequently and deeply, about 20 mm per application.",
         "drought": "Drought risk is {risk}.",
         "mow": "Mowing is suitable today.",
-        "mow_reason": "Conditions are dry enough and growth supports regular mowing.",
+        "mow_reason": "Growth supports mowing; check that the grass is dry.",
         "robot_mow": "The robot mower can run today.",
         "robot_mow_reason": "Robot mower-specific blocking factors are clear.",
-        "fertilize": "Fertilizer conditions are favorable.",
+        "fertilize": "Consider fertilizer if needed; follow the product label.",
+        "wait_mowing": "Wait before mowing.",
+        "wait_fertilizer": "Wait before fertilizing.",
+        "unknown_fertilizer": "Fertilizer need cannot yet be assessed.",
+        "low_growth_pause": "Growth is limited; wait until mowing is needed.",
+        "final_cut": "Keep a high setting for the final cut. Remove leaves and use sharp blades.",
+        "maintenance": "Use sharp blades. Check robot blades regularly, typically every 3–4 weeks depending on model and wear. Sharpen manual mower blades in June and before the final cut. Collect or spread clumps, remove thick leaf layers and vary mowing routes.",
         "fertilizer_score": "Fertilizer score is {score}.",
         "monitor": "Keep monitoring conditions.",
         "growth": "Growth is {growth} and no major action is recommended.",
@@ -350,10 +370,10 @@ def _texts(language: str) -> dict[str, str]:
         "shade_height": "Shaded lawns need extra leaf area for stronger growth.",
         "high_shade_height": "High shade increases the recommended cutting height.",
         "summer_height": "Summer stress favors a higher mowing height.",
-        "very_low_rain_height": "Combined rain is far below the configured moisture threshold, keeping the target at maximum height.",
-        "medium_rain_height": "Combined rain is below the configured moisture threshold, moving the target to median height.",
-        "good_rain_height": "Combined rain meets the configured moisture threshold, making minimum height suitable.",
-        "near_term_water_height": "Enough rain has fallen or is expected within 24 hours, making a lower mowing height suitable.",
+        "very_low_rain_height": "Observed rain is far below the configured moisture threshold, keeping the target at maximum height.",
+        "medium_rain_height": "Observed rain is below the configured moisture threshold, moving the target to median height.",
+        "good_rain_height": "Observed rain meets the configured moisture threshold, making minimum height suitable.",
+        "near_term_water_height": "Enough rain has fallen within 24 hours, making a lower mowing height suitable.",
         "low_soil_moisture_height": "Low soil moisture keeps the mowing height at maximum to protect the lawn.",
         "high_forecast_drying_height": "Sun, heat and limited rain over the next three days keep the mowing height at maximum.",
         "moderate_forecast_drying_height": "Expected drying over the next three days raises the mowing height to the middle of the range.",

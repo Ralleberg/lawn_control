@@ -29,6 +29,18 @@ class LawnNumberEntityDescription(NumberEntityDescription):
 
 NUMBER_ENTITIES: tuple[LawnNumberEntityDescription, ...] = (
     LawnNumberEntityDescription(
+        key="estimated_grass_height",
+        translation_key="estimated_grass_height",
+        name="Lawn Expected Grass Height",
+        icon="mdi:grass",
+        native_min_value=15,
+        native_max_value=300,
+        native_step=1,
+        native_unit_of_measurement="mm",
+        mode="box",
+        config_key="estimated_grass_height",
+    ),
+    LawnNumberEntityDescription(
         key=CONF_FERTILIZER_N_PERCENT,
         translation_key=CONF_FERTILIZER_N_PERCENT,
         name="Lawn Fertilizer N Percent",
@@ -80,9 +92,7 @@ async def async_setup_entry(
     )
 
 
-class LawnControlNumberEntity(
-    CoordinatorEntity[LawnControlCoordinator], NumberEntity
-):
+class LawnControlNumberEntity(CoordinatorEntity[LawnControlCoordinator], NumberEntity):
     """Lawn Control number entity."""
 
     entity_description: LawnNumberEntityDescription
@@ -106,12 +116,17 @@ class LawnControlNumberEntity(
         )
 
     @property
-    def native_value(self) -> float:
+    def native_value(self) -> float | None:
         """Return the configured percentage."""
+        if self.entity_description.key == "estimated_grass_height":
+            return self.coordinator.estimated_grass_height
         return self.coordinator.fertilizer_percent(self.entity_description.config_key)
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the fertilizer percentage."""
+        if self.entity_description.key == "estimated_grass_height":
+            await self.coordinator.async_set_estimated_grass_height(value)
+            return
         await self.coordinator.async_set_fertilizer_percent(
             self.entity_description.config_key,
             value,

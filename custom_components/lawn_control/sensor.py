@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
-from homeassistant.const import UnitOfLength
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import UnitOfLength
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -32,6 +32,15 @@ class LawnSensorEntityDescription(SensorEntityDescription):
 
 
 SENSORS: tuple[LawnSensorEntityDescription, ...] = (
+    LawnSensorEntityDescription(
+        key="recommended_mowing_frequency",
+        translation_key="recommended_mowing_frequency",
+        name="Lawn Recommended Mowing Frequency",
+        icon="mdi:calendar-week",
+        native_unit_of_measurement="cuts/week",
+        value_fn=lambda data: data["recommended_mowing_frequency"]["value"],
+        attrs_fn=lambda data: data["recommended_mowing_frequency"]["attributes"],
+    ),
     LawnSensorEntityDescription(
         key="recommended_grass_height",
         translation_key="recommended_grass_height",
